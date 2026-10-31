@@ -88,7 +88,11 @@ fun AppRoot(
             onPairingComplete()
             screen = SCREEN_HOME
         })
-        else -> HomeScreen(onDisconnect = { screen = SCREEN_PAIRING })
+        else -> HomeScreen(
+            onDisconnect = { screen = SCREEN_PAIRING },
+            permissionResult = permissionResult,
+            onGrantPermissions = onGrantPermissions,
+        )
     }
 }
 
@@ -144,7 +148,7 @@ fun PermissionsScreen(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    if (available) "Your watch data reaches Health Connect through its writing app (for a Redmi Watch 5 Lite that is Mi Fitness)."
+                    if (available) "Your watch or fitness app writes data into Health Connect; this app only reads what is already there."
                     else "Install or update Health Connect from the Play Store, then return here.",
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -161,19 +165,22 @@ fun PermissionsScreen(
             Button(onClick = onGrant, enabled = available, modifier = Modifier.fillMaxWidth()) {
                 Text("Grant Health Connect permissions")
             }
-            Spacer(Modifier.height(6.dp))
-            TextButton(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
-                Text("Continue without granting (can grant later)")
-            }
         } else {
             Text(
-                "Granted ${result.size} permission(s). You can change these anytime in Android Settings → Health Connect.",
+                "Granted ${result.size} of ${HealthConnectManager.PERMISSIONS.size} permission(s). " +
+                    "You can change these anytime in Android Settings → Health Connect.",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Spacer(Modifier.height(12.dp))
-            Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
-                Text("Continue")
+            Spacer(Modifier.height(8.dp))
+            if (result.size < HealthConnectManager.PERMISSIONS.size) {
+                Button(onClick = onGrant, enabled = available, modifier = Modifier.fillMaxWidth()) {
+                    Text("Try granting again")
+                }
+                Spacer(Modifier.height(6.dp))
             }
+        }
+        TextButton(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
+            Text(if (result == null) "Continue without granting (can grant later)" else "Continue")
         }
     }
 }
@@ -264,7 +271,11 @@ fun PairingScreen(onPaired: () -> Unit) {
 }
 
 @Composable
-fun HomeScreen(onDisconnect: () -> Unit) {
+fun HomeScreen(
+    onDisconnect: () -> Unit,
+    permissionResult: Set<String>? = null,
+    onGrantPermissions: () -> Unit = {},
+) {
     val context = LocalContext.current
     val store = remember { SecureStore.get(context) }
     val hc = remember { HealthConnectManager(context) }
@@ -281,6 +292,21 @@ fun HomeScreen(onDisconnect: () -> Unit) {
         }
     }
 
+    // After a Health Connect permission round-trip (launched from this screen
+    // or from onboarding): refresh the count and push a first sync so data
+    // starts flowing without another tap.
+    LaunchedEffect(permissionResult) {
+        if (permissionResult != null) {
+            grantedCount = runCatching { hc.grantedPermissions().size }.getOrNull()
+            if ((grantedCount ?: 0) > 0) {
+                syncing = true
+                summary = SyncEngine.syncNow(context)
+                grantedCount = runCatching { hc.grantedPermissions().size }.getOrNull()
+                syncing = false
+            }
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(28.dp).verticalScroll(rememberScrollState()),
     ) {
@@ -290,6 +316,34 @@ fun HomeScreen(onDisconnect: () -> Unit) {
         StatusCard("Health Connect", if (hc.isAvailable) "Available" else "Unavailable — install from the Play Store")
         StatusCard("Website account", "${store.deviceLabel} → ${hostOf(store.serverUrl)}")
         StatusCard("Health Connect permissions", grantedCount?.let { "$it granted" } ?: "Not checked yet")
+
+        // Always-visible way in: if anything is missing, offer the grant
+        // dialog right here so a paired install is never stuck at 0.
+        val grantedNow = grantedCount
+        val permissionsIncomplete = grantedNow == null || grantedNow < HealthConnectManager.PERMISSIONS.size
+        if (permissionsIncomplete && hc.isAvailable) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text(
+                        "Health Connect permissions missing",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Text(
+                        "Without read permission the app cannot see any health data. Tap below, then allow all.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = onGrantPermissions, modifier = Modifier.fillMaxWidth()) {
+                        Text("Grant Health Connect permissions")
+                    }
+                }
+            }
+        }
         StatusCard(
             "Last successful sync",
             store.lastSyncAt?.let { formatInstant(it) } ?: "No sync yet — tap Sync Now",
@@ -335,6 +389,13 @@ fun HomeScreen(onDisconnect: () -> Unit) {
         Text(
             "Background sync: the app checks the website every 15 minutes and syncs any requested changes; " +
                 "it also runs a full sync at least every 6 hours. This is periodic synchronization, not real-time streaming.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Tip: if a sync succeeds but shows no records, open the Health Connect app → App access and " +
+                "make sure your watch or fitness app is allowed to write data there.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

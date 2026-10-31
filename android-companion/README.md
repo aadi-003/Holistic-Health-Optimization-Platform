@@ -5,7 +5,7 @@ Kotlin + Jetpack Compose app that reads authorized health records from
 Health Optimization Platform account over HTTPS.
 
 ```
-Redmi Watch 5 Lite → Xiaomi Mi Fitness → Health Connect → this app → platform API → website
+watch / fitness app → Health Connect (via the writing app's sharing option) → this app → platform API → website
 ```
 
 ## Screens
@@ -91,15 +91,28 @@ time: `gradle assembleRelease -PserverUrl="https://<your-site>"`.
   `--init-script ../scripts/gradle-mirror-init.gradle` to route resolution
   through the Aliyun mirror (project files stay untouched).
 
-## Mi Fitness / Redmi Watch 5 Lite notes
+## Troubleshooting
 
-- Enable sharing in **Mi Fitness → Settings → Health Connect** (or
-  *Data permissions*) so the watch data lands in Health Connect.
-- Only measurements Mi Fitness actually shares will appear. The platform shows
-  "no records" for everything else — nothing is simulated.
+- **Permission dialog shows nothing / sync reports 0 granted permissions.**
+  Health Connect only grants permissions the app declares in
+  `AndroidManifest.xml` (`android.permission.health.READ_*`). All nine are
+  declared there and must stay in sync with `HealthConnectManager.PERMISSIONS`
+  — requesting an undeclared permission silently returns "not granted".
+- **Re-granting later.** The sync home screen shows a red
+  "Health Connect permissions missing" card with a grant button whenever the
+  granted count is below the requested set; granting from there also kicks off
+  a sync immediately.
+
+## Watch / fitness app notes
+
+- Enable sharing in your watch/fitness app's **Health Connect** settings
+  (e.g. its *Data permissions / Data sharing* screen) so the watch data lands
+  in Health Connect.
+- Only measurements the writing app actually shares will appear. The platform
+  shows "no records" for everything else — nothing is simulated.
 - Expect: steps, heart rate, sleep (with stages where provided), active
-  calories, distance, SpO2. Resting heart rate and HRV depend on the Mi
-  Fitness version — verify on-device after the first sync.
+  calories, distance, SpO2. Resting heart rate and HRV depend on the writing
+  app — verify on-device after the first sync.
 
 ## Privacy
 

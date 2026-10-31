@@ -14,8 +14,8 @@ android {
         applicationId = "com.holistic.companion"
         minSdk = 28          // Android 9 — Health Connect's floor via the Play Store app
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
         // Optional pre-fill for the server URL on the pairing screen.
         // Pass with: gradle assembleRelease -PserverUrl="https://your-deployment.example"
         // Leave empty to let users type their deployment URL.
