@@ -73,8 +73,6 @@ cp .env.example .env
 #   - DATABASE_URL points at a local SQLite file by default (db/holistic.db)
 #   - set JWT_SECRET for anything beyond casual local use:
 #     openssl rand -base64 48
-#   - optional, for the Google Fit connection:
-#     NEXT_PUBLIC_GOOGLE_CLIENT_ID (see "Health data connections" below)
 
 # 3. Create the database schema
 bun run db:push
@@ -94,31 +92,25 @@ Full guides: [docs/SETUP.md](docs/SETUP.md) · [docs/DEPLOYMENT.md](docs/DEPLOYM
 
 ## Health data connections
 
-The **Health Data** section offers a phone-based pipeline plus a browser fallback —
-no simulated devices anywhere:
+The **Health Data** section offers one phone-based pipeline — no simulated
+devices anywhere:
 
-- **Android companion app (primary)**: `android-companion/` is a Kotlin + Jetpack
-  Compose app that reads authorized records from **Health Connect** and syncs them
-  to the user's account over HTTPS with a device-scoped, revocable token. Watches
-  reach Health Connect through their phone app (reference device: **Xiaomi Redmi
-  Watch 5 Lite → Mi Fitness**). Steps, heart rate, resting heart rate, sleep
-  (incl. stages where shared), active calories, distance, exercise sessions, SpO2
-  and HRV are supported; anything Mi Fitness does not share simply stays absent.
+- **Android companion app**: `android-companion/` is a Kotlin + Jetpack
+  Compose app that reads authorized records from **Health Connect** and syncs
+  them to the user's account over HTTPS with a device-scoped, revocable token.
+  Watches reach Health Connect through their normal phone apps. Steps, heart
+  rate, resting heart rate, sleep (incl. stages where shared), active calories,
+  distance, exercise sessions, SpO2 and HRV are supported; anything the phone
+  apps do not share with Health Connect simply stays absent.
   Pairing is a single-use 10-minute code generated on the website; the web page
-  shows a QR code + Download button once the APK URL is set in
+  always shows a QR code + Download button pointing at the APK served from this
+  site (`/downloads/holistic-health-companion.apk`), overridable via
   `NEXT_PUBLIC_COMPANION_APK_URL`. See [docs/COMPANION_APP.md](docs/COMPANION_APP.md).
-- **Google Fit (secondary)**: sign in with Google via the Google Identity Services
-  popup; the app imports the last 7 days of steps, active minutes, heart rate and
-  sleep through the Google Fit REST API and stores them with provenance `measured`,
-  source `google_fit`. One-time owner setup: create an OAuth 2.0 *Web application*
-  client ID, add the site origin under *Authorized JavaScript origins*, and set
-  `NEXT_PUBLIC_GOOGLE_CLIENT_ID=<client id>` in `.env`.
 
-Revoking a connection (companion disconnect, or Google Fit) deletes only the
-readings that came through it. Readings accepted with `provenance: "measured"`
-are restricted server-side to the `bluetooth:*` / `google_fit*` /
-`health_connect:*` source prefixes — any other client input is downgraded to
-`manual`.
+Revoking the connection deletes only the readings that came through it.
+Readings accepted with `provenance: "measured"` are restricted server-side to
+the `bluetooth:*` / `google_fit*` / `health_connect:*` source prefixes — any
+other client input is downgraded to `manual`.
 
 **Environment fallback.** Weather comes from Open-Meteo, then wttr.in. If both providers are
 unreachable (quota, network), the app records the city's typical climate from a built-in
@@ -176,7 +168,7 @@ platform's research report and its bibliography, including:
 - Anagha & Deole 2021 — dinacharya chapter with classical verse citations (CSNE).
 - Dhiman et al. 2026 — ritucharya (publisher-verified abstract only; disclosed).
 - Shaffer & Ginsberg 2017 — HRV primer; Fuller et al. 2020 — wearable accuracy meta-analysis;
-  Google Fit REST API documentation (October 2026).
+  Android Health Connect documentation (October 2026).
 
 The full reference list with links renders inside the app on **About & References**.
 
@@ -186,9 +178,9 @@ The full reference list with links renders inside the app on **About & Reference
 2. The Vikriti score is an experimental platform method with no clinical validation or cutoffs.
 3. The 50/30/20 combined model is a design proposal; the research report explicitly cautions
    against unweighted merging, which is why contributions stay separately visible.
-4. Health data integrations cover Google Fit (REST) and the Android Health
-   Connect companion app (see docs/COMPANION_APP.md); what reaches the platform
-   depends on what each phone app shares with Health Connect.
+4. Health data integration relies on the Android Health Connect companion app
+   (see docs/COMPANION_APP.md); what reaches the platform depends on what each
+   phone app shares with Health Connect.
 5. Web-initiated sync is best-effort (≤15 min background pickup); instant sync
    happens from the companion app. No real-time streaming is claimed.
 6. Classical "half-strength" exercise dosing and seasonal routines are traditional guidance,

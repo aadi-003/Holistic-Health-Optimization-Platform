@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -15,8 +17,9 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         // Optional pre-fill for the server URL on the pairing screen.
+        // Pass with: gradle assembleRelease -PserverUrl="https://your-deployment.example"
         // Leave empty to let users type their deployment URL.
-        buildConfigField("String", "DEFAULT_SERVER_URL", "\"\"")
+        buildConfigField("String", "DEFAULT_SERVER_URL", "\"${project.findProperty("serverUrl") ?: ""}\"")
     }
 
     signingConfigs {
@@ -25,7 +28,7 @@ android {
             // Generate: see android-companion/README.md — never commit keys.
             val propsFile = rootProject.file("keystore.properties")
             if (propsFile.exists()) {
-                val props = java.util.Properties().apply {
+                val props = Properties().apply {
                     propsFile.inputStream().use { load(it) }
                 }
                 storeFile = file(props.getProperty("storeFile"))

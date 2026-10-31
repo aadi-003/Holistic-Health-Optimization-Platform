@@ -2,13 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Panel, Callout, Spinner } from "@/components/holistic/shared";
+import { Panel, Spinner } from "@/components/holistic/shared";
 import { api, post } from "@/lib/client-api";
 import { useApp, fmtDateTime } from "@/lib/store";
-import { fetchFitReadings, getFitAccessToken, fitClientId } from "@/lib/google-fit";
 import { toast } from "@/hooks/use-toast";
 import {
-  Smartphone, Watch, HeartPulse, RefreshCw, CheckCircle2, Activity, Moon,
+  Smartphone, Watch, HeartPulse, RefreshCw, Activity, Moon,
   Footprints, Flame, Route, Timer, QrCode, Download, Unplug, Wind,
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -16,10 +15,9 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "rec
 /**
  * Health Data — connect your health records.
  *
- * Primary path: the Android companion app reads Health Connect (where the
- * Xiaomi Mi Fitness app writes Redmi Watch 5 Lite data) and syncs it to this
- * account. Google Fit stays as a secondary, browser-based path.
- * Only real synchronized records are displayed — nothing is simulated.
+ * Single path: the Android companion app reads Health Connect on the user's
+ * phone and syncs the records to this account. Only real synchronized records
+ * are displayed — nothing is simulated.
  */
 
 interface CompanionStatus {
@@ -58,10 +56,6 @@ interface HistoryResponse {
   series: Record<string, { date: string; value: number }[]>;
   units: Record<string, string>;
   total: number;
-}
-
-interface ConsentState {
-  active: Record<string, { scope: string | null; grantedAt: string }>;
 }
 
 /** Data types the companion app requests from Health Connect. */
@@ -123,46 +117,44 @@ export default function WearablesScreen() {
   const [status, setStatus] = useState<CompanionStatus | null>(null);
   const [latest, setLatest] = useState<LatestMetric[] | null>(null);
   const [history, setHistory] = useState<HistoryResponse | null>(null);
-  const [consent, setConsent] = useState<ConsentState | null>(null);
   const [busy, setBusy] = useState(false);
   const [pairingCode, setPairingCode] = useState<{ code: string; expiresAt: string } | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // APK download URL: NEXT_PUBLIC_COMPANION_APK_URL overrides the default,
+  // which is the APK served by this very site at /downloads/holistic-health-companion.apk.
   const apkUrl = useMemo(() => {
-    const raw = process.env.NEXT_PUBLIC_COMPANION_APK_URL;
-    if (!raw || typeof window === "undefined") return null;
+    if (typeof window === "undefined") return null;
     try {
-      return new URL(raw, window.location.origin).toString();
+      return new URL(
+        process.env.NEXT_PUBLIC_COMPANION_APK_URL || "/downloads/holistic-health-companion.apk",
+        window.location.origin,
+      ).toString();
     } catch {
       return null;
     }
   }, []);
 
   const load = useCallback(async () => {
-    const [s, l, h, c] = await Promise.all([
+    const [s, l, h] = await Promise.all([
       api<CompanionStatus>("/api/health/status").catch(() => null),
       api<{ metrics: LatestMetric[] }>("/api/health/latest").then((r) => r.metrics).catch(() => []),
       api<HistoryResponse>("/api/health/history?days=7").catch(() => null),
-      api<ConsentState>("/api/consent").catch(() => ({ active: {} }) as ConsentState),
     ]);
     setStatus(s ?? { device: null, pairing: null, metricsAvailable: [] });
     setLatest(l);
     setHistory(h);
-    setConsent(c);
   }, []);
 
   useEffect(() => {
     load().catch(() => setStatus({ device: null, pairing: null, metricsAvailable: [] }));
   }, [load]);
 
-  // QR code for the APK download URL (rendered only once the owner sets a real URL).
+  // QR code for the APK download URL — always rendered.
   useEffect(() => {
-    if (!apkUrl) {
-      setQr(null);
-      return;
-    }
+    if (!apkUrl) return;
     import("qrcode")
       .then((QR) => QR.toDataURL(apkUrl, { margin: 1, width: 240, color: { dark: "#14532d", light: "#ffffff" } }))
       .then(setQr)
@@ -240,44 +232,11 @@ export default function WearablesScreen() {
     }
   }
 
-  /* ------------------------------ Google Fit -------------------------------- */
-
-  async function connectGoogleFit() {
-    setBusy(true);
-    try {
-      const token = await getFitAccessToken();
-      const rows = await fetchFitReadings(token, 7);
-      if (rows.length === 0) {
-        toast({ title: "No Google Fit data found", description: "Nothing recorded in the last 7 days." });
-        setBusy(false);
-        return;
-      }
-      let created = 0;
-      for (const r of rows) {
-        try {
-          await post("/api/readings", { metric: r.metric, value: r.value, recordedAt: r.recordedAt, provenance: "measured", source: "google_fit" });
-          created += 1;
-        } catch {
-          // Skip rows outside the app's valid ranges (e.g. extreme HR values).
-        }
-      }
-      await post("/api/consent", { kind: "google_fit", scope: "fitness.read", granted: true });
-      await load();
-      toast({ title: "Google Fit connected", description: `${created} readings imported from the last 7 days.` });
-    } catch (err) {
-      toast({ title: "Google Fit connection failed", description: err instanceof Error ? err.message : "", variant: "destructive" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
   /* --------------------------------- view ---------------------------------- */
 
-  if (!status || !consent || latest == null) return <Spinner label="Checking connections…" />;
+  if (!status || latest == null) return <Spinner label="Checking connections…" />;
 
   const device = status.device;
-  const fitActive = !!consent.active["google_fit"];
-  const fitAt = consent.active["google_fit"]?.grantedAt;
   const availableKeys = new Set(latest.map((m) => m.metric));
   const waitingFor = EXPECTED_TYPES.filter((t) => !availableKeys.has(t.key));
   const chartMetrics = CHART_PRIORITY.filter((m) => history?.series?.[m]?.length).slice(0, 4);
@@ -301,9 +260,8 @@ export default function WearablesScreen() {
           <div className="flex-1">
             <h2 className="font-semibold">Android companion app</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              A small app on your Android phone reads Health Connect and syncs your records to this account.
-              Your watch (e.g. Redmi Watch 5 Lite) syncs to the phone through <strong className="text-foreground">Mi Fitness</strong> —
-              the browser never pairs with the watch directly.
+              A small app on your Android phone reads Health Connect and syncs your records to this
+              account automatically — no browser pairing, no manual entry.
             </p>
 
             <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-start">
@@ -311,12 +269,8 @@ export default function WearablesScreen() {
                 <div className="flex h-[248px] w-[248px] items-center justify-center rounded-lg border border-dashed p-1">
                   {qr ? (
                     <img src={qr} alt="QR code — download the Holistic companion app" className="h-full w-full rounded-md" />
-                  ) : apkUrl ? (
-                    <QrCode className="h-10 w-10 text-muted-foreground/50" />
                   ) : (
-                    <div className="px-4 text-center text-xs text-muted-foreground">
-                      QR code appears here once the APK download URL is configured.
-                    </div>
+                    <QrCode className="h-10 w-10 animate-pulse text-muted-foreground/50" />
                   )}
                 </div>
                 <p className="text-center text-xs text-muted-foreground">Scan with your phone camera</p>
@@ -325,37 +279,21 @@ export default function WearablesScreen() {
               <div className="flex-1">
                 <ol className="list-inside list-decimal space-y-1.5 text-sm text-muted-foreground">
                   <li>Scan the QR code or tap <strong className="text-foreground">Download Companion App</strong>.</li>
-                  <li>Install the APK (allow &ldquo;install from this source&rdquo; when asked).</li>
-                  <li>Open the app, grant Health Connect permissions, then enter the pairing code from below.</li>
+                  <li>Install the app on your Android phone.</li>
+                  <li>Open the app and connect Health Connect.</li>
                 </ol>
                 <div className="mt-4">
-                  {apkUrl ? (
-                    <a href={apkUrl}>
-                      <Button>
-                        <Download className="mr-1.5 h-4 w-4" /> Download Companion App
-                      </Button>
-                    </a>
-                  ) : (
-                    <Button disabled>
+                  <a href={apkUrl ?? undefined}>
+                    <Button>
                       <Download className="mr-1.5 h-4 w-4" /> Download Companion App
                     </Button>
-                  )}
+                  </a>
                 </div>
                 <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                  Requires Android 9+ with Health Connect (already built into Android 14+). Install Health Connect
-                  from the Play Store on Android 9-13. Data types supported: steps, heart rate, resting heart rate,
-                  sleep and stages, active calories, distance, exercise sessions, SpO2 and HRV where Mi Fitness
-                  shares them.
+                  Requires Android 9+ with Health Connect (built into Android 14+ — on Android 9–13,
+                  install it from the Play Store). The app reads whatever health data your phone apps
+                  share with Health Connect: steps, heart rate, sleep, calories, distance, SpO2 and more.
                 </p>
-                {!apkUrl && (
-                  <Callout tone="info" title="One-time setup (app owner)">
-                    <ol className="mt-1 list-inside list-decimal space-y-0.5 text-xs">
-                      <li>Build the signed APK: <code>android-companion/</code> — see <code>docs/COMPANION_APP.md</code> or run the GitHub Actions workflow.</li>
-                      <li>Host the APK over HTTPS (e.g. GitHub Releases, or drop it in <code>public/downloads/</code>).</li>
-                      <li>Put the URL in <code>.env</code> as <code>NEXT_PUBLIC_COMPANION_APK_URL</code> and restart.</li>
-                    </ol>
-                  </Callout>
-                )}
               </div>
             </div>
           </div>
@@ -526,8 +464,8 @@ export default function WearablesScreen() {
                 <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Syncing</span>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Readings are written to Health Connect by this phone app — for a Redmi Watch 5 Lite that is
-                Mi Fitness (watch → Mi Fitness → Health Connect → companion → this platform).
+                This phone app writes your readings into Health Connect — the companion app then syncs
+                them to your account.
               </p>
             </div>
           </div>
@@ -543,8 +481,8 @@ export default function WearablesScreen() {
 
         {latest.length === 0 ? (
           <p className="mt-4 rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-            No records found. Pair the companion app above and run a sync — measurements that are not shared by
-            Mi Fitness simply stay absent.
+            Data unavailable. Pair the companion app above and run a sync — anything your phone apps do not
+            share with Health Connect simply stays absent.
           </p>
         ) : (
           <>
@@ -607,48 +545,12 @@ export default function WearablesScreen() {
         )}
       </Panel>
 
-      {/* E. Google Fit (secondary path) */}
       <Panel>
-        <div className="flex items-start gap-3.5">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-primary">
-            <HeartPulse className="h-5 w-5" />
-          </span>
-          <div className="flex-1">
-            <h2 className="font-semibold">Google Fit</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Alternative browser-based path: sign in with Google and the last 7 days of steps, active minutes,
-              heart rate and sleep import automatically. Works in a phone browser too.
-            </p>
-            {!fitActive && (
-              <Button className="mt-4" onClick={connectGoogleFit} disabled={busy}>
-                {busy ? "Connecting…" : "Connect Google Fit"}
-              </Button>
-            )}
-            {fitActive && fitAt && (
-              <p className="mt-3 text-sm text-muted-foreground">
-                <CheckCircle2 className="mr-1.5 inline h-4 w-4 text-emerald-600" /> Linked {fmtDateTime(fitAt)} — reconnect to pull new readings.
-              </p>
-            )}
-            {!fitClientId() && (
-              <Callout tone="info" title="One-time setup (app owner)">
-                <ol className="mt-1 list-inside list-decimal space-y-0.5 text-xs">
-                  <li>Google Cloud Console → APIs &amp; Services → Credentials → create an OAuth client ID (Web application).</li>
-                  <li>Add this site&apos;s address under Authorized JavaScript origins.</li>
-                  <li>Put the client ID in <code>.env</code> as <code>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> and restart.</li>
-                </ol>
-              </Callout>
-            )}
-          </div>
-        </div>
-      </Panel>
-
-      <Panel>
-        <h2 className="font-semibold">How the companion flow works</h2>
+        <h2 className="font-semibold">How it works</h2>
         <ol className="mt-3 list-inside list-decimal space-y-1.5 text-xs leading-relaxed text-muted-foreground">
-          <li>Your Redmi Watch 5 Lite syncs to the <strong className="text-foreground">Mi Fitness</strong> app on your Android phone (Bluetooth, automatic).</li>
-          <li>Mi Fitness writes supported records into <strong className="text-foreground">Health Connect</strong> — check Mi Fitness → Settings → Health Connect.</li>
-          <li>The Holistic companion app (installed above) reads the authorized records and syncs them to your account over HTTPS.</li>
-          <li>Open the app and tap <strong className="text-foreground">Sync Now</strong> for an instant sync, or use the button on this page for a background sync within 15 minutes.</li>
+          <li>Install the companion app (above) and connect Health Connect.</li>
+          <li>Your phone&apos;s health records sync to this account automatically in the background.</li>
+          <li>Need an instant sync? Tap <strong className="text-foreground">Sync Now</strong> in the app or on this page.</li>
         </ol>
         <Button variant="ghost" size="sm" className="mt-4" onClick={() => setView("manual-entry")}>
           Prefer to enter readings manually?

@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -70,8 +71,9 @@ fun AppRoot(
     onGrantPermissions: () -> Unit,
     onPairingComplete: () -> Unit,
 ) {
-    val store = remember { SecureStore.get(LocalContext.current) }
-    var screen by androidx.compose.runtime.saveable.rememberSaveable {
+    val context = LocalContext.current
+    val store = remember(context) { SecureStore.get(context) }
+    var screen by rememberSaveable {
         mutableStateOf(if (store.isPaired) SCREEN_HOME else SCREEN_WELCOME)
     }
 

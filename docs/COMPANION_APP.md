@@ -52,8 +52,7 @@ Database: two new models in `prisma/schema.prisma` —
 (token hash, device info, last sync bookkeeping, Health Connect data origins).
 Readings reuse the existing `HealthReading` ledger with
 `source = "health_connect:<dataOrigin>"`, so the combined vikriti model, History
-and recommendation engines consume companion data exactly like manual/Google Fit
-data. New companion-only metrics (`active_calories`, `distance`,
+and recommendation engines consume companion data exactly like manual entries. New companion-only metrics (`active_calories`, `distance`,
 `sleep_stage_*`) are display-only and are **not** added to the combined model.
 
 ## Metrics mapping (Health Connect → platform)
@@ -104,15 +103,13 @@ See `android-companion/README.md`. Short version:
    `keystore.properties`, git-ignored) — or run the **android-release** GitHub
    Actions workflow (secrets: `ANDROID_KEYSTORE_BASE64`,
    `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`).
-2. Host the APK over HTTPS — GitHub Release asset, or drop it into
-   `public/downloads/`.
-3. Set `NEXT_PUBLIC_COMPANION_APK_URL=<the https URL>` in the platform `.env`
-   and restart.
-4. The Health Data page then renders the real QR code (generated client-side
-   from that exact URL) and enables **Download Companion App**.
-
-Until step 3 is done the page shows the setup callout instead of a QR code —
-the QR is never a placeholder URL.
+2. Copy the signed APK to `public/downloads/holistic-health-companion.apk`
+   in the platform repo — the site serves it at
+   `/downloads/holistic-health-companion.apk`. To host elsewhere (e.g. a
+   GitHub Release asset) instead, set `NEXT_PUBLIC_COMPANION_APK_URL` in `.env`.
+3. Restart the site. The Health Data page always renders a real QR code
+   (generated client-side from the download URL) and an enabled
+   **Download Companion App** button — the QR is never a placeholder.
 
 ## Security properties
 

@@ -18,6 +18,7 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import kotlin.reflect.KClass
 
 /** One normalized record ready for POST /api/health/sync. */
 data class SyncRecord(val metric: String, val value: Double, val recordedAt: Instant, val origin: String) {
@@ -108,7 +109,7 @@ class HealthConnectManager(private val context: Context) {
         val errors = mutableListOf<String>()
 
         suspend fun <T : Record> read(
-            type: Class<T>,
+            type: KClass<T>,
             typeName: String,
             convert: (T) -> List<SyncRecord>,
         ) {
@@ -136,19 +137,19 @@ class HealthConnectManager(private val context: Context) {
             }
         }
 
-        read(StepsRecord::class.java, "steps") { r ->
+        read(StepsRecord::class, "steps") { r ->
             listOf(SyncRecord("steps", r.count.toDouble(), r.endTime, r.metadata.dataOrigin.packageName))
         }
 
-        read(HeartRateRecord::class.java, "heart_rate") { r ->
-            val bpm = r.samples.map { it.beatsPerMinute }.filter { it in 30.0..230.0 }
+        read(HeartRateRecord::class, "heart_rate") { r ->
+            val bpm = r.samples.map { it.beatsPerMinute.toDouble() }.filter { it in 30.0..230.0 }
             if (bpm.isEmpty()) emptyList()
             else listOf(
-                SyncRecord("heart_rate", Math.round(bpm.average()), r.endTime, r.metadata.dataOrigin.packageName),
+                SyncRecord("heart_rate", Math.round(bpm.average()).toDouble(), r.endTime, r.metadata.dataOrigin.packageName),
             )
         }
 
-        read(RestingHeartRateRecord::class.java, "resting_heart_rate") { r ->
+        read(RestingHeartRateRecord::class, "resting_heart_rate") { r ->
             listOf(
                 SyncRecord(
                     "resting_heart_rate",
@@ -159,7 +160,7 @@ class HealthConnectManager(private val context: Context) {
             )
         }
 
-        read(SleepSessionRecord::class.java, "sleep") { r ->
+        read(SleepSessionRecord::class, "sleep") { r ->
             val origin = r.metadata.dataOrigin.packageName
             val hours = Duration.between(r.startTime, r.endTime).toMillis() / 3_600_000.0
             val out = mutableListOf(
@@ -170,9 +171,9 @@ class HealthConnectManager(private val context: Context) {
             val stageMinutes = mutableMapOf<String, Long>()
             for (stage in r.stages) {
                 val key = when (stage.stage) {
-                    SleepSessionRecord.STAGE_AWAKE -> "sleep_stage_awake"
-                    SleepSessionRecord.STAGE_DEEP -> "sleep_stage_deep"
-                    SleepSessionRecord.STAGE_REM -> "sleep_stage_rem"
+                    SleepSessionRecord.STAGE_TYPE_AWAKE -> "sleep_stage_awake"
+                    SleepSessionRecord.STAGE_TYPE_DEEP -> "sleep_stage_deep"
+                    SleepSessionRecord.STAGE_TYPE_REM -> "sleep_stage_rem"
                     else -> "sleep_stage_light"
                 }
                 stageMinutes[key] = (stageMinutes[key] ?: 0L) +
@@ -184,7 +185,7 @@ class HealthConnectManager(private val context: Context) {
             out
         }
 
-        read(ActiveCaloriesBurnedRecord::class.java, "active_calories") { r ->
+        read(ActiveCaloriesBurnedRecord::class, "active_calories") { r ->
             listOf(
                 SyncRecord(
                     "active_calories",
@@ -195,11 +196,11 @@ class HealthConnectManager(private val context: Context) {
             )
         }
 
-        read(DistanceRecord::class.java, "distance") { r ->
+        read(DistanceRecord::class, "distance") { r ->
             listOf(
                 SyncRecord(
                     "distance",
-                    Math.round(r.length.inKilometers * 100) / 100.0,
+                    Math.round(r.distance.inKilometers * 100) / 100.0,
                     r.endTime,
                     r.metadata.dataOrigin.packageName,
                 ),
@@ -207,7 +208,7 @@ class HealthConnectManager(private val context: Context) {
         }
 
         // Exercise sessions feed the platform's existing "active minutes" metric.
-        read(ExerciseSessionRecord::class.java, "exercise") { r ->
+        read(ExerciseSessionRecord::class, "exercise") { r ->
             val minutes = Duration.between(r.startTime, r.endTime).toMinutes()
             if (minutes <= 0) emptyList()
             else listOf(
@@ -215,8 +216,8 @@ class HealthConnectManager(private val context: Context) {
             )
         }
 
-        read(OxygenSaturationRecord::class.java, "spo2") { r ->
-            val pct = r.percentage
+        read(OxygenSaturationRecord::class, "spo2") { r ->
+            val pct = r.percentage.value
             if (pct in 50.0..100.0) {
                 listOf(SyncRecord("spo2", pct, r.time, r.metadata.dataOrigin.packageName))
             } else {
@@ -224,7 +225,7 @@ class HealthConnectManager(private val context: Context) {
             }
         }
 
-        read(HeartRateVariabilityRmssdRecord::class.java, "hrv") { r ->
+        read(HeartRateVariabilityRmssdRecord::class, "hrv") { r ->
             listOf(
                 SyncRecord(
                     "hrv_rmssd",

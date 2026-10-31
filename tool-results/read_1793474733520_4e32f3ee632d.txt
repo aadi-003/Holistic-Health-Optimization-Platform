@@ -1,0 +1,689 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+     4→import { Button } from "@/components/ui/button";
+     5→import { Panel, Callout, Spinner } from "@/components/holistic/shared";
+     6→import { api, post } from "@/lib/client-api";
+     7→import { useApp, fmtDateTime } from "@/lib/store";
+     8→import { fetchFitReadings, getFitAccessToken, fitClientId } from "@/lib/google-fit";
+     9→import { toast } from "@/hooks/use-toast";
+    10→import {
+    11→  Smartphone, Watch, HeartPulse, RefreshCw, CheckCircle2, Activity, Moon,
+    12→  Footprints, Flame, Route, Timer, QrCode, Download, Unplug, Wind,
+    13→} from "lucide-react";
+    14→import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+    15→
+    16→/**
+    17→ * Health Data — connect your health records.
+    18→ *
+    19→ * Primary path: the Android companion app reads Health Connect (where the
+    20→ * Xiaomi Mi Fitness app writes Redmi Watch 5 Lite data) and syncs it to this
+    21→ * account. Google Fit stays as a secondary, browser-based path.
+    22→ * Only real synchronized records are displayed — nothing is simulated.
+    23→ */
+    24→
+    25→interface CompanionStatus {
+    26→  device: {
+    27→    id: string;
+    28→    label: string;
+    29→    model: string | null;
+    30→    osVersion: string | null;
+    31→    appVersion: string | null;
+    32→    pairedAt: string;
+    33→    permissions: string[];
+    34→    origins: string[];
+    35→    lastSyncAt: string | null;
+    36→    lastSyncStatus: string | null;
+    37→    lastSyncMessage: string | null;
+    38→    lastSyncCreated: number | null;
+    39→    lastSyncTotal: number | null;
+    40→    syncRequested: boolean;
+    41→  } | null;
+    42→  pairing: { createdAt: string; expiresAt: string } | null;
+    43→  metricsAvailable: { metric: string; count: number; lastAt: string | null }[];
+    44→}
+    45→
+    46→interface LatestMetric {
+    47→  metric: string;
+    48→  label: string;
+    49→  value: number;
+    50→  unit: string;
+    51→  recordedAt: string;
+    52→  origin: string;
+    53→  originLabel: string;
+    54→}
+    55→
+    56→interface HistoryResponse {
+    57→  days: number;
+    58→  series: Record<string, { date: string; value: number }[]>;
+    59→  units: Record<string, string>;
+    60→  total: number;
+    61→}
+    62→
+    63→interface ConsentState {
+    64→  active: Record<string, { scope: string | null; grantedAt: string }>;
+    65→}
+    66→
+    67→/** Data types the companion app requests from Health Connect. */
+    68→const EXPECTED_TYPES = [
+    69→  { key: "steps", label: "Steps" },
+    70→  { key: "heart_rate", label: "Heart rate" },
+    71→  { key: "resting_heart_rate", label: "Resting heart rate" },
+    72→  { key: "sleep_duration", label: "Sleep" },
+    73→  { key: "active_calories", label: "Active calories" },
+    74→  { key: "distance", label: "Distance" },
+    75→  { key: "active_minutes", label: "Exercise / active minutes" },
+    76→  { key: "spo2", label: "SpO2" },
+    77→  { key: "hrv_rmssd", label: "HRV" },
+    78→];
+    79→
+    80→const PERMISSION_LABEL: Record<string, string> = {
+    81→  steps: "Steps",
+    82→  heart_rate: "Heart rate",
+    83→  resting_heart_rate: "Resting heart rate",
+    84→  sleep: "Sleep (incl. stages)",
+    85→  active_calories: "Active calories",
+    86→  distance: "Distance",
+    87→  exercise: "Exercise sessions",
+    88→  spo2: "SpO2",
+    89→  hrv: "HRV (RMSSD)",
+    90→};
+    91→
+    92→const METRIC_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+    93→  heart_rate: HeartPulse,
+    94→  resting_heart_rate: HeartPulse,
+    95→  hrv_rmssd: Activity,
+    96→  sleep_duration: Moon,
+    97→  steps: Footprints,
+    98→  active_minutes: Timer,
+    99→  spo2: Wind,
+   100→  active_calories: Flame,
+   101→  distance: Route,
+   102→  sleep_stage_light: Moon,
+   103→  sleep_stage_deep: Moon,
+   104→  sleep_stage_rem: Moon,
+   105→  sleep_stage_awake: Moon,
+   106→};
+   107→
+   108→const CHART_PRIORITY = [
+   109→  "steps", "sleep_duration", "heart_rate", "active_calories",
+   110→  "resting_heart_rate", "active_minutes", "distance", "spo2", "hrv_rmssd",
+   111→  "sleep_stage_deep", "sleep_stage_light", "sleep_stage_rem", "sleep_stage_awake",
+   112→];
+   113→
+   114→function fmtValue(metric: string, value: number): string {
+   115→  if (metric === "steps") return Math.round(value).toLocaleString("en-US");
+   116→  if (metric === "distance" || metric === "spo2") return (Math.round(value * 10) / 10).toString();
+   117→  if (metric === "sleep_duration") return (Math.round(value * 10) / 10).toString();
+   118→  return Math.round(value).toLocaleString("en-US");
+   119→}
+   120→
+   121→export default function WearablesScreen() {
+   122→  const setView = useApp((s) => s.setView);
+   123→  const [status, setStatus] = useState<CompanionStatus | null>(null);
+   124→  const [latest, setLatest] = useState<LatestMetric[] | null>(null);
+   125→  const [history, setHistory] = useState<HistoryResponse | null>(null);
+   126→  const [consent, setConsent] = useState<ConsentState | null>(null);
+   127→  const [busy, setBusy] = useState(false);
+   128→  const [pairingCode, setPairingCode] = useState<{ code: string; expiresAt: string } | null>(null);
+   129→  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+   130→  const [qr, setQr] = useState<string | null>(null);
+   131→  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+   132→
+   133→  const apkUrl = useMemo(() => {
+   134→    const raw = process.env.NEXT_PUBLIC_COMPANION_APK_URL;
+   135→    if (!raw || typeof window === "undefined") return null;
+   136→    try {
+   137→      return new URL(raw, window.location.origin).toString();
+   138→    } catch {
+   139→      return null;
+   140→    }
+   141→  }, []);
+   142→
+   143→  const load = useCallback(async () => {
+   144→    const [s, l, h, c] = await Promise.all([
+   145→      api<CompanionStatus>("/api/health/status").catch(() => null),
+   146→      api<{ metrics: LatestMetric[] }>("/api/health/latest").then((r) => r.metrics).catch(() => []),
+   147→      api<HistoryResponse>("/api/health/history?days=7").catch(() => null),
+   148→      api<ConsentState>("/api/consent").catch(() => ({ active: {} }) as ConsentState),
+   149→    ]);
+   150→    setStatus(s ?? { device: null, pairing: null, metricsAvailable: [] });
+   151→    setLatest(l);
+   152→    setHistory(h);
+   153→    setConsent(c);
+   154→  }, []);
+   155→
+   156→  useEffect(() => {
+   157→    load().catch(() => setStatus({ device: null, pairing: null, metricsAvailable: [] }));
+   158→  }, [load]);
+   159→
+   160→  // QR code for the APK download URL (rendered only once the owner sets a real URL).
+   161→  useEffect(() => {
+   162→    if (!apkUrl) {
+   163→      setQr(null);
+   164→      return;
+   165→    }
+   166→    import("qrcode")
+   167→      .then((QR) => QR.toDataURL(apkUrl, { margin: 1, width: 240, color: { dark: "#14532d", light: "#ffffff" } }))
+   168→      .then(setQr)
+   169→      .catch(() => setQr(null));
+   170→  }, [apkUrl]);
+   171→
+   172→  // While a pairing code is live and no device is paired, poll for completion.
+   173→  useEffect(() => {
+   174→    const waiting = pairingCode != null && status?.device == null;
+   175→    if (waiting && pollRef.current == null) {
+   176→      pollRef.current = setInterval(async () => {
+   177→        const s = await api<CompanionStatus>("/api/health/status").catch(() => null);
+   178→        if (s) {
+   179→          setStatus(s);
+   180→          if (s.device) {
+   181→            setPairingCode(null);
+   182→            toast({ title: "Companion app paired", description: `${s.device.label} is now linked to your account.` });
+   183→          }
+   184→        }
+   185→      }, 4000);
+   186→    }
+   187→    if (!waiting && pollRef.current != null) {
+   188→      clearInterval(pollRef.current);
+   189→      pollRef.current = null;
+   190→    }
+   191→    return () => {
+   192→      if (pollRef.current != null) {
+   193→        clearInterval(pollRef.current);
+   194→        pollRef.current = null;
+   195→      }
+   196→    };
+   197→  }, [pairingCode, status?.device]);
+   198→
+   199→  /* ---------------------------- companion actions --------------------------- */
+   200→
+   201→  async function generateCode() {
+   202→    setBusy(true);
+   203→    try {
+   204→      const res = await post<{ code: string; expiresAt: string }>("/api/health/pairing/create", {});
+   205→      setPairingCode(res);
+   206→    } catch (err) {
+   207→      toast({ title: "Could not create a pairing code", description: err instanceof Error ? err.message : "", variant: "destructive" });
+   208→    } finally {
+   209→      setBusy(false);
+   210→    }
+   211→  }
+   212→
+   213→  async function syncNow() {
+   214→    setBusy(true);
+   215→    try {
+   216→      await post("/api/health/sync/request", {});
+   217→      toast({
+   218→        title: "Sync requested",
+   219→        description: "Your phone picks this up at its next background check (within 15 min). Open the companion app and tap Sync Now for an instant sync.",
+   220→      });
+   221→      await load();
+   222→    } catch (err) {
+   223→      toast({ title: "Could not request a sync", description: err instanceof Error ? err.message : "", variant: "destructive" });
+   224→    } finally {
+   225→      setBusy(false);
+   226→    }
+   227→  }
+   228→
+   229→  async function disconnectCompanion() {
+   230→    setBusy(true);
+   231→    try {
+   232→      await post("/api/health/device/disconnect", {});
+   233→      toast({ title: "Companion disconnected", description: "Its sync token was revoked and synchronized readings were removed." });
+   234→      setConfirmDisconnect(false);
+   235→      await load();
+   236→    } catch (err) {
+   237→      toast({ title: "Disconnect failed", description: err instanceof Error ? err.message : "", variant: "destructive" });
+   238→    } finally {
+   239→      setBusy(false);
+   240→    }
+   241→  }
+   242→
+   243→  /* ------------------------------ Google Fit -------------------------------- */
+   244→
+   245→  async function connectGoogleFit() {
+   246→    setBusy(true);
+   247→    try {
+   248→      const token = await getFitAccessToken();
+   249→      const rows = await fetchFitReadings(token, 7);
+   250→      if (rows.length === 0) {
+   251→        toast({ title: "No Google Fit data found", description: "Nothing recorded in the last 7 days." });
+   252→        setBusy(false);
+   253→        return;
+   254→      }
+   255→      let created = 0;
+   256→      for (const r of rows) {
+   257→        try {
+   258→          await post("/api/readings", { metric: r.metric, value: r.value, recordedAt: r.recordedAt, provenance: "measured", source: "google_fit" });
+   259→          created += 1;
+   260→        } catch {
+   261→          // Skip rows outside the app's valid ranges (e.g. extreme HR values).
+   262→        }
+   263→      }
+   264→      await post("/api/consent", { kind: "google_fit", scope: "fitness.read", granted: true });
+   265→      await load();
+   266→      toast({ title: "Google Fit connected", description: `${created} readings imported from the last 7 days.` });
+   267→    } catch (err) {
+   268→      toast({ title: "Google Fit connection failed", description: err instanceof Error ? err.message : "", variant: "destructive" });
+   269→    } finally {
+   270→      setBusy(false);
+   271→    }
+   272→  }
+   273→
+   274→  /* --------------------------------- view ---------------------------------- */
+   275→
+   276→  if (!status || !consent || latest == null) return <Spinner label="Checking connections…" />;
+   277→
+   278→  const device = status.device;
+   279→  const fitActive = !!consent.active["google_fit"];
+   280→  const fitAt = consent.active["google_fit"]?.grantedAt;
+   281→  const availableKeys = new Set(latest.map((m) => m.metric));
+   282→  const waitingFor = EXPECTED_TYPES.filter((t) => !availableKeys.has(t.key));
+   283→  const chartMetrics = CHART_PRIORITY.filter((m) => history?.series?.[m]?.length).slice(0, 4);
+   284→  const originNames = device?.origins ?? [];
+   285→
+   286→  return (
+   287→    <div className="animate-fade-up mx-auto max-w-4xl space-y-6">
+   288→      <div>
+   289→        <h1 className="text-2xl font-semibold tracking-tight">Connect Your Health Data</h1>
+   290→        <p className="mt-1.5 text-sm text-muted-foreground">
+   291→          Connect your Android phone&apos;s health records to your Holistic Health Optimization Platform.
+   292→        </p>
+   293→      </div>
+   294→
+   295→      {/* A. Android companion app — download & install */}
+   296→      <Panel>
+   297→        <div className="flex items-start gap-3.5">
+   298→          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-primary">
+   299→            <Smartphone className="h-5 w-5" />
+   300→          </span>
+   301→          <div className="flex-1">
+   302→            <h2 className="font-semibold">Android companion app</h2>
+   303→            <p className="mt-1 text-sm text-muted-foreground">
+   304→              A small app on your Android phone reads Health Connect and syncs your records to this account.
+   305→              Your watch (e.g. Redmi Watch 5 Lite) syncs to the phone through <strong className="text-foreground">Mi Fitness</strong> —
+   306→              the browser never pairs with the watch directly.
+   307→            </p>
+   308→
+   309→            <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-start">
+   310→              <div className="flex flex-col items-center gap-3 rounded-xl border bg-card p-4">
+   311→                <div className="flex h-[248px] w-[248px] items-center justify-center rounded-lg border border-dashed p-1">
+   312→                  {qr ? (
+   313→                    <img src={qr} alt="QR code — download the Holistic companion app" className="h-full w-full rounded-md" />
+   314→                  ) : apkUrl ? (
+   315→                    <QrCode className="h-10 w-10 text-muted-foreground/50" />
+   316→                  ) : (
+   317→                    <div className="px-4 text-center text-xs text-muted-foreground">
+   318→                      QR code appears here once the APK download URL is configured.
+   319→                    </div>
+   320→                  )}
+   321→                </div>
+   322→                <p className="text-center text-xs text-muted-foreground">Scan with your phone camera</p>
+   323→              </div>
+   324→
+   325→              <div className="flex-1">
+   326→                <ol className="list-inside list-decimal space-y-1.5 text-sm text-muted-foreground">
+   327→                  <li>Scan the QR code or tap <strong className="text-foreground">Download Companion App</strong>.</li>
+   328→                  <li>Install the APK (allow &ldquo;install from this source&rdquo; when asked).</li>
+   329→                  <li>Open the app, grant Health Connect permissions, then enter the pairing code from below.</li>
+   330→                </ol>
+   331→                <div className="mt-4">
+   332→                  {apkUrl ? (
+   333→                    <a href={apkUrl}>
+   334→                      <Button>
+   335→                        <Download className="mr-1.5 h-4 w-4" /> Download Companion App
+   336→                      </Button>
+   337→                    </a>
+   338→                  ) : (
+   339→                    <Button disabled>
+   340→                      <Download className="mr-1.5 h-4 w-4" /> Download Companion App
+   341→                    </Button>
+   342→                  )}
+   343→                </div>
+   344→                <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+   345→                  Requires Android 9+ with Health Connect (already built into Android 14+). Install Health Connect
+   346→                  from the Play Store on Android 9-13. Data types supported: steps, heart rate, resting heart rate,
+   347→                  sleep and stages, active calories, distance, exercise sessions, SpO2 and HRV where Mi Fitness
+   348→                  shares them.
+   349→                </p>
+   350→                {!apkUrl && (
+   351→                  <Callout tone="info" title="One-time setup (app owner)">
+   352→                    <ol className="mt-1 list-inside list-decimal space-y-0.5 text-xs">
+   353→                      <li>Build the signed APK: <code>android-companion/</code> — see <code>docs/COMPANION_APP.md</code> or run the GitHub Actions workflow.</li>
+   354→                      <li>Host the APK over HTTPS (e.g. GitHub Releases, or drop it in <code>public/downloads/</code>).</li>
+   355→                      <li>Put the URL in <code>.env</code> as <code>NEXT_PUBLIC_COMPANION_APK_URL</code> and restart.</li>
+   356→                    </ol>
+   357→                  </Callout>
+   358→                )}
+   359→              </div>
+   360→            </div>
+   361→          </div>
+   362→        </div>
+   363→      </Panel>
+   364→
+   365→      {/* B. Connection status */}
+   366→      <Panel>
+   367→        <div className="flex flex-wrap items-start justify-between gap-4">
+   368→          <div className="flex items-start gap-3.5">
+   369→            <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${device ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}>
+   370→              <Watch className="h-5 w-5" />
+   371→            </span>
+   372→            <div>
+   373→              <div className="flex items-center gap-2">
+   374→                <h2 className="font-semibold">Connection status</h2>
+   375→                {device ? (
+   376→                  <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Connected</span>
+   377→                ) : (
+   378→                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">Not connected</span>
+   379→                )}
+   380→              </div>
+   381→              {device ? (
+   382→                <p className="mt-0.5 text-sm text-muted-foreground">
+   383→                  {device.label}
+   384→                  {device.model ? ` · ${device.model}` : ""}
+   385→                  {device.appVersion ? ` · companion v${device.appVersion}` : ""}
+   386→                  {" "}· paired {fmtDateTime(device.pairedAt)}
+   387→                </p>
+   388→              ) : (
+   389→                <p className="mt-0.5 text-sm text-muted-foreground">No companion app is paired with your account yet.</p>
+   390→              )}
+   391→            </div>
+   392→          </div>
+   393→          {device && (
+   394→            <div className="flex gap-2">
+   395→              <Button size="sm" onClick={syncNow} disabled={busy}>
+   396→                <RefreshCw className={`mr-1.5 h-4 w-4 ${busy ? "animate-spin" : ""}`} /> Sync Now
+   397→              </Button>
+   398→              {confirmDisconnect ? (
+   399→                <>
+   400→                  <Button size="sm" variant="destructive" onClick={disconnectCompanion} disabled={busy}>Confirm disconnect</Button>
+   401→                  <Button size="sm" variant="ghost" onClick={() => setConfirmDisconnect(false)} disabled={busy}>Cancel</Button>
+   402→                </>
+   403→              ) : (
+   404→                <Button size="sm" variant="outline" onClick={() => setConfirmDisconnect(true)} disabled={busy}>
+   405→                  <Unplug className="mr-1.5 h-4 w-4" /> Disconnect
+   406→                </Button>
+   407→              )}
+   408→            </div>
+   409→          )}
+   410→        </div>
+   411→
+   412→        {!device ? (
+   413→          /* Pairing flow */
+   414→          <div className="mt-4 rounded-xl border bg-card p-5">
+   415→            <h3 className="text-sm font-semibold">Pair the companion app</h3>
+   416→            <p className="mt-1 text-sm text-muted-foreground">
+   417→              1. Install the app (above) · 2. Generate a code here · 3. Enter it in the app within 10 minutes.
+   418→            </p>
+   419→            {pairingCode ? (
+   420→              <div className="mt-4 flex flex-col items-center gap-3 rounded-lg border border-dashed p-5">
+   421→                <p className="text-xs uppercase tracking-wide text-muted-foreground">Your pairing code</p>
+   422→                <p className="font-mono text-4xl font-semibold tracking-[0.35em] text-primary">{pairingCode.code}</p>
+   423→                <p className="text-xs text-muted-foreground">
+   424→                  Single-use · expires {fmtDateTime(pairingCode.expiresAt)} · waiting for the app…
+   425→                </p>
+   426→                <div className="flex items-center gap-2">
+   427→                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   428→                    <RefreshCw className="h-3 w-3 animate-spin" /> checking automatically
+   429→                  </span>
+   430→                  <Button size="sm" variant="ghost" onClick={generateCode} disabled={busy}>Use a new code</Button>
+   431→                </div>
+   432→              </div>
+   433→            ) : (
+   434→              <Button className="mt-4" onClick={generateCode} disabled={busy}>
+   435→                Generate pairing code
+   436→              </Button>
+   437→            )}
+   438→          </div>
+   439→        ) : (
+   440→          /* Status details */
+   441→          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+   442→            <div className="rounded-lg border p-4">
+   443→              <h3 className="text-sm font-semibold">Health Connect permissions</h3>
+   444→              {device.permissions.length > 0 ? (
+   445→                <div className="mt-2 flex flex-wrap gap-1.5">
+   446→                  {device.permissions.map((p) => (
+   447→                    <span key={p} className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+   448→                      {PERMISSION_LABEL[p] ?? p}
+   449→                    </span>
+   450→                  ))}
+   451→                </div>
+   452→              ) : (
+   453→                <p className="mt-2 text-sm text-muted-foreground">Not reported yet — run a sync from the app.</p>
+   454→              )}
+   455→              <p className="mt-3 text-xs text-muted-foreground">Granted inside the companion app; revoke there or in Android Settings → Health Connect.</p>
+   456→            </div>
+   457→            <div className="rounded-lg border p-4">
+   458→              <h3 className="text-sm font-semibold">Last synchronization</h3>
+   459→              {device.lastSyncAt ? (
+   460→                <>
+   461→                  <p className="mt-2 text-sm">
+   462→                    {fmtDateTime(device.lastSyncAt)}
+   463→                    {device.lastSyncStatus && (
+   464→                      <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${
+   465→                        device.lastSyncStatus === "success"
+   466→                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+   467→                          : device.lastSyncStatus === "partial"
+   468→                            ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+   469→                            : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
+   470→                      }`}>
+   471→                        {device.lastSyncStatus}
+   472→                      </span>
+   473→                    )}
+   474→                  </p>
+   475→                  {device.lastSyncMessage && <p className="mt-1 text-xs text-muted-foreground">{device.lastSyncMessage}</p>}
+   476→                  {device.syncRequested && <p className="mt-2 text-xs text-primary">Sync requested from this website — the app will pick it up shortly.</p>}
+   477→                </>
+   478→              ) : (
+   479→                <p className="mt-2 text-sm text-muted-foreground">No sync yet — open the app and tap Sync Now.</p>
+   480→              )}
+   481→              {device.lastSyncStatus === "error" && device.lastSyncMessage && (
+   482→                <p className="mt-2 rounded-md bg-red-50 px-2.5 py-1.5 text-xs text-red-800 dark:bg-red-950 dark:text-red-300">{device.lastSyncMessage}</p>
+   483→              )}
+   484→            </div>
+   485→            <div className="rounded-lg border p-4">
+   486→              <h3 className="text-sm font-semibold">Available health data</h3>
+   487→              {status.metricsAvailable.length > 0 ? (
+   488→                <div className="mt-2 flex flex-wrap gap-1.5">
+   489→                  {status.metricsAvailable.map((m) => (
+   490→                    <span key={m.metric} className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">
+   491→                      {PERMISSION_LABEL[m.metric] ?? COMPANION_METRIC_LABEL[m.metric] ?? m.metric} · {m.count}
+   492→                    </span>
+   493→                  ))}
+   494→                </div>
+   495→              ) : (
+   496→                <p className="mt-2 text-sm text-muted-foreground">No records found yet.</p>
+   497→              )}
+   498→            </div>
+   499→            <div className="rounded-lg border p-4">
+   500→              <h3 className="text-sm font-semibold">Data sources</h3>
+   501→              {originNames.length > 0 ? (
+   502→                <div className="mt-2 space-y-1.5">
+   503→                  {originNames.map((o) => (
+   504→                    <p key={o} className="text-sm text-muted-foreground">
+   505→                      <strong className="font-medium text-foreground">{COMPANION_ORIGIN_LABEL[o] ?? o}</strong>
+   506→                      <span className="ml-1.5 font-mono text-[10px] text-muted-foreground/70">{o}</span>
+   507→                    </p>
+   508→                  ))}
+   509→                </div>
+   510→              ) : (
+   511→                <p className="mt-2 text-sm text-muted-foreground">Reported after the first successful sync.</p>
+   512→              )}
+   513→            </div>
+   514→          </div>
+   515→        )}
+   516→
+   517→        {/* Connected device card — only once the writing app is actually known */}
+   518→        {originNames.length > 0 && (
+   519→          <div className="mt-4 flex items-center gap-4 rounded-xl border bg-accent/40 p-4">
+   520→            <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-background shadow-sm">
+   521→              <Watch className="h-7 w-7 text-primary" />
+   522→            </span>
+   523→            <div>
+   524→              <div className="flex flex-wrap items-center gap-2">
+   525→                <p className="font-semibold">{originNames.map((o) => COMPANION_ORIGIN_LABEL[o] ?? o).join(", ")}</p>
+   526→                <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Syncing</span>
+   527→              </div>
+   528→              <p className="mt-0.5 text-xs text-muted-foreground">
+   529→                Readings are written to Health Connect by this phone app — for a Redmi Watch 5 Lite that is
+   530→                Mi Fitness (watch → Mi Fitness → Health Connect → companion → this platform).
+   531→              </p>
+   532→            </div>
+   533→          </div>
+   534→        )}
+   535→      </Panel>
+   536→
+   537→      {/* C+D. Health dashboard — synchronized records only */}
+   538→      <Panel>
+   539→        <h2 className="font-semibold">Synchronized health data</h2>
+   540→        <p className="mt-1 text-sm text-muted-foreground">
+   541→          Only records actually synchronized by the companion app appear here — nothing is estimated or simulated.
+   542→        </p>
+   543→
+   544→        {latest.length === 0 ? (
+   545→          <p className="mt-4 rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+   546→            No records found. Pair the companion app above and run a sync — measurements that are not shared by
+   547→            Mi Fitness simply stay absent.
+   548→          </p>
+   549→        ) : (
+   550→          <>
+   551→            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+   552→              {latest.map((m) => {
+   553→                const Icon = METRIC_ICON[m.metric] ?? Activity;
+   554→                return (
+   555→                  <div key={m.metric} className="rounded-lg border p-4">
+   556→                    <div className="flex items-center justify-between">
+   557→                      <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+   558→                        <Icon className="h-4 w-4 text-primary" /> {m.label}
+   559→                      </span>
+   560→                      <span className="text-[10px] text-muted-foreground/70">{m.originLabel}</span>
+   561→                    </div>
+   562→                    <div className="mt-2 text-2xl font-semibold tabular-nums">
+   563→                      {fmtValue(m.metric, m.value)} <span className="text-sm font-normal text-muted-foreground">{m.unit}</span>
+   564→                    </div>
+   565→                    <p className="mt-1 text-xs text-muted-foreground">{fmtDateTime(m.recordedAt)}</p>
+   566→                  </div>
+   567→                );
+   568→              })}
+   569→            </div>
+   570→
+   571→            {chartMetrics.length > 0 && (
+   572→              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+   573→                {chartMetrics.map((metric) => {
+   574→                  const data = (history?.series?.[metric] ?? []).map((d) => ({
+   575→                    date: new Date(d.date + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+   576→                    value: d.value,
+   577→                  }));
+   578→                  const unit = history?.units?.[metric] ?? "";
+   579→                  return (
+   580→                    <div key={metric} className="rounded-lg border p-4">
+   581→                      <p className="text-sm font-medium">
+   582→                        {COMPANION_METRIC_LABEL[metric] ?? metric} <span className="text-xs text-muted-foreground">· last 7 days ({unit})</span>
+   583→                      </p>
+   584→                      <div className="mt-2 h-28">
+   585→                        <ResponsiveContainer width="100%" height="100%">
+   586→                          <LineChart data={data}>
+   587→                            <XAxis dataKey="date" fontSize={10} tickLine={false} axisLine={false} />
+   588→                            <YAxis fontSize={10} tickLine={false} axisLine={false} width={38} />
+   589→                            <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid var(--border)", fontSize: 12 }} />
+   590→                            <Line type="monotone" dataKey="value" stroke="#2e6b46" strokeWidth={2} dot />
+   591→                          </LineChart>
+   592→                        </ResponsiveContainer>
+   593→                      </div>
+   594→                    </div>
+   595→                  );
+   596→                })}
+   597→              </div>
+   598→            )}
+   599→
+   600→            {waitingFor.length > 0 && (
+   601→              <p className="mt-4 text-xs text-muted-foreground">
+   602→                Not received yet: {waitingFor.map((t) => t.label).join(", ")}. A type stays absent until the
+   603→                writing app actually shares it with Health Connect.
+   604→              </p>
+   605→            )}
+   606→          </>
+   607→        )}
+   608→      </Panel>
+   609→
+   610→      {/* E. Google Fit (secondary path) */}
+   611→      <Panel>
+   612→        <div className="flex items-start gap-3.5">
+   613→          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-primary">
+   614→            <HeartPulse className="h-5 w-5" />
+   615→          </span>
+   616→          <div className="flex-1">
+   617→            <h2 className="font-semibold">Google Fit</h2>
+   618→            <p className="mt-1 text-sm text-muted-foreground">
+   619→              Alternative browser-based path: sign in with Google and the last 7 days of steps, active minutes,
+   620→              heart rate and sleep import automatically. Works in a phone browser too.
+   621→            </p>
+   622→            {!fitActive && (
+   623→              <Button className="mt-4" onClick={connectGoogleFit} disabled={busy}>
+   624→                {busy ? "Connecting…" : "Connect Google Fit"}
+   625→              </Button>
+   626→            )}
+   627→            {fitActive && fitAt && (
+   628→              <p className="mt-3 text-sm text-muted-foreground">
+   629→                <CheckCircle2 className="mr-1.5 inline h-4 w-4 text-emerald-600" /> Linked {fmtDateTime(fitAt)} — reconnect to pull new readings.
+   630→              </p>
+   631→            )}
+   632→            {!fitClientId() && (
+   633→              <Callout tone="info" title="One-time setup (app owner)">
+   634→                <ol className="mt-1 list-inside list-decimal space-y-0.5 text-xs">
+   635→                  <li>Google Cloud Console → APIs &amp; Services → Credentials → create an OAuth client ID (Web application).</li>
+   636→                  <li>Add this site&apos;s address under Authorized JavaScript origins.</li>
+   637→                  <li>Put the client ID in <code>.env</code> as <code>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> and restart.</li>
+   638→                </ol>
+   639→              </Callout>
+   640→            )}
+   641→          </div>
+   642→        </div>
+   643→      </Panel>
+   644→
+   645→      <Panel>
+   646→        <h2 className="font-semibold">How the companion flow works</h2>
+   647→        <ol className="mt-3 list-inside list-decimal space-y-1.5 text-xs leading-relaxed text-muted-foreground">
+   648→          <li>Your Redmi Watch 5 Lite syncs to the <strong className="text-foreground">Mi Fitness</strong> app on your Android phone (Bluetooth, automatic).</li>
+   649→          <li>Mi Fitness writes supported records into <strong className="text-foreground">Health Connect</strong> — check Mi Fitness → Settings → Health Connect.</li>
+   650→          <li>The Holistic companion app (installed above) reads the authorized records and syncs them to your account over HTTPS.</li>
+   651→          <li>Open the app and tap <strong className="text-foreground">Sync Now</strong> for an instant sync, or use the button on this page for a background sync within 15 minutes.</li>
+   652→        </ol>
+   653→        <Button variant="ghost" size="sm" className="mt-4" onClick={() => setView("manual-entry")}>
+   654→          Prefer to enter readings manually?
+   655→        </Button>
+   656→      </Panel>
+   657→    </div>
+   658→  );
+   659→}
+   660→
+   661→/** Client-side label maps (mirrors src/lib/health-metrics.ts). */
+   662→const COMPANION_METRIC_LABEL: Record<string, string> = {
+   663→  heart_rate: "Heart rate",
+   664→  resting_heart_rate: "Resting heart rate",
+   665→  hrv_rmssd: "HRV (RMSSD)",
+   666→  sleep_duration: "Sleep",
+   667→  steps: "Steps",
+   668→  active_minutes: "Active minutes",
+   669→  spo2: "SpO2",
+   670→  active_calories: "Active calories",
+   671→  distance: "Distance",
+   672→  sleep_stage_light: "Sleep — light",
+   673→  sleep_stage_deep: "Sleep — deep",
+   674→  sleep_stage_rem: "Sleep — REM",
+   675→  sleep_stage_awake: "Sleep — awake",
+   676→};
+   677→
+   678→const COMPANION_ORIGIN_LABEL: Record<string, string> = {
+   679→  "com.xiaomi.wearable": "Mi Fitness (Xiaomi)",
+   680→  "com.xiaomi.hm.health": "Zepp Life (Xiaomi)",
+   681→  "com.google.android.apps.fitness": "Google Fit",
+   682→  "com.samsung.android.health": "Samsung Health",
+   683→  "com.huawei.health": "Huawei Health",
+   684→  "com.fitbit.FitbitMobile": "Fitbit",
+   685→  "com.heytap.health": "OHealth (OnePlus/Oppo)",
+   686→  "com.oplus.health": "OHealth (OnePlus/Oppo)",
+   687→  "com.amazfithealth": "Zepp (Amazfit)",
+   688→};
+   689→

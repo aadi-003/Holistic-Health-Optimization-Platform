@@ -1,0 +1,13 @@
+// Route Gradle dependency resolution through the Aliyun mirror. Useful when
+// repo.maven.apache.org rate-limits the build network (HTTP 429).
+// Usage: gradle --init-script scripts/gradle-mirror-init.gradle assembleRelease
+// The project's settings.gradle.kts is untouched; this only affects the build run.
+settingsEvaluated { settings ->
+    settings.pluginManagement.repositories.clear()
+    settings.pluginManagement.repositories.maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+    settings.pluginManagement.repositories.maven { url 'https://maven.aliyun.com/repository/google' }
+    settings.pluginManagement.repositories.maven { url 'https://maven.aliyun.com/repository/central' }
+    settings.dependencyResolutionManagement.repositories.clear()
+    settings.dependencyResolutionManagement.repositories.maven { url 'https://maven.aliyun.com/repository/google' }
+    settings.dependencyResolutionManagement.repositories.maven { url 'https://maven.aliyun.com/repository/central' }
+}

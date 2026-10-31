@@ -24,7 +24,7 @@
    | `DATABASE_URL` | Yes | SQLite file path for dev (`"file:./db/holistic.db"`). Use a PostgreSQL URL in deployment. |
    | `JWT_SECRET` | Required in production | Session signing key. Generate: `openssl rand -base64 48`. In dev, a fallback is used with a console warning. |
    | `CORS_ORIGINS` | No | Comma-separated allowed origins; empty = same-origin only. |
-   | `GOOGLE_CLIENT_ID/SECRET` | No | Optional OAuth; email/password works independently. |
+   | `NEXT_PUBLIC_COMPANION_APK_URL` | No | Override the companion APK download URL; by default the APK is served from this site at `/downloads/holistic-health-companion.apk`. |
    | `WEATHER_API_KEY` | No | Not needed for Open-Meteo; reserved for a keyed provider. |
 
 3. **Create the database schema**
