@@ -93,6 +93,15 @@ time: `gradle assembleRelease -PserverUrl="https://<your-site>"`.
 
 ## Troubleshooting
 
+- **"Pairing failed" even though the code is correct.** The request never
+  reached the server — the app's **Server URL** doesn't match the live site
+  address. The URL is baked in at build time (`-PserverUrl=…`) and preview
+  hosts can change after a redeploy, so it must be edited on the pairing
+  screen to exactly the address the browser shows. The website's pairing card
+  also prints the required URL. As of v1.1.1 the app says "Could not reach
+  <url>…" for this case, and non-JSON proxy error pages are reported as
+  "HTTP <code> — the server sent a non-JSON page. Check the Server URL."
+  instead of a cryptic JSON parse error.
 - **Permission dialog shows nothing / sync reports 0 granted permissions.**
   Health Connect only grants permissions the app declares in
   `AndroidManifest.xml` (`android.permission.health.READ_*`). All nine are

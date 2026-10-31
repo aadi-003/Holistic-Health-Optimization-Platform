@@ -137,6 +137,9 @@ export default function WearablesScreen() {
     }
   }, []);
 
+  // This page's own address — the app's "Server URL" field must match it.
+  const siteOrigin = useMemo(() => (typeof window === "undefined" ? null : window.location.origin), []);
+
   const load = useCallback(async () => {
     const [s, l, h] = await Promise.all([
       api<CompanionStatus>("/api/health/status").catch(() => null),
@@ -367,6 +370,12 @@ export default function WearablesScreen() {
                   </span>
                   <Button size="sm" variant="ghost" onClick={generateCode} disabled={busy}>Use a new code</Button>
                 </div>
+                {siteOrigin && (
+                  <p className="text-center text-xs text-muted-foreground">
+                    Pairing failed? In the app, the <span className="font-medium">Server URL</span> must be exactly{" "}
+                    <span className="font-mono text-foreground">{siteOrigin}</span> — the same address this page is open at.
+                  </p>
+                )}
               </div>
             ) : (
               <Button className="mt-4" onClick={generateCode} disabled={busy}>

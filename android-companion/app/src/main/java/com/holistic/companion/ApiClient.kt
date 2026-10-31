@@ -40,7 +40,18 @@ object ApiClient {
         val text = stream?.let { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { r -> r.readText() } } ?: ""
         conn.disconnect()
 
-        val json = if (text.isBlank()) JSONObject() else JSONObject(text)
+        // A wrong Server URL usually ends up on an HTML error page (proxy 410,
+        // captive portal, parked domain…) — make that unmistakable instead of
+        // crashing inside the JSON parser.
+        val json = if (text.isBlank()) {
+            JSONObject()
+        } else {
+            try {
+                JSONObject(text)
+            } catch (_: Exception) {
+                throw ApiException(status, "HTTP $status — the server sent a non-JSON page. Check the Server URL.")
+            }
+        }
         if (status !in 200..299) {
             throw ApiException(status, json.optString("error", "HTTP $status"))
         }

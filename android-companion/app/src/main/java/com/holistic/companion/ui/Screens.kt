@@ -253,7 +253,14 @@ fun PairingScreen(onPaired: () -> Unit) {
                         CompanionWorker.schedule(context)
                         onPaired()
                     } catch (e: Exception) {
-                        error = e.message ?: "Pairing failed."
+                        error = if (e is ApiClient.ApiException) {
+                            e.message ?: "Pairing failed."
+                        } else {
+                            // Network-level failure: 99% of the time it is a
+                            // wrong/unreachable Server URL.
+                            "Could not reach $base. Check the Server URL — it must be exactly the address " +
+                                "you use to open the website in this phone's browser."
+                        }
                     }
                     busy = false
                 }

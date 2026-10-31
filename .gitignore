@@ -1,13 +1,2 @@
 skills/
 node_modules/
-.env
-db/
-dev.log
-upload/
-download/
-*.tsbuildinfo
-# Companion app signing secrets — never commit keys or passwords
-android-companion/keystore.properties
-android-companion/release.keystore
-android-companion/app/release.keystore
-.next/
