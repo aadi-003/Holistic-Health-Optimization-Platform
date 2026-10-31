@@ -1,0 +1,3 @@
+{
+  "/api/health/device/disconnect/route": "app/api/health/device/disconnect/route.js"
+}

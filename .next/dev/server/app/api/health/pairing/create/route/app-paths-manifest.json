@@ -1,0 +1,3 @@
+{
+  "/api/health/pairing/create/route": "app/api/health/pairing/create/route.js"
+}
