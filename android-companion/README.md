@@ -66,23 +66,30 @@ fine for testing; use a real key for distribution).
 
 ## Distribute
 
-Two supported options (both end at the QR code on the website's Health Data
-page):
+The QR code on the website's Health Data page points at this site's own copy of
+the APK by default: `https://<your-site>/downloads/holistic-health-companion.apk`
+(`public/downloads/holistic-health-companion.apk` in the repo). Copy a fresh
+build there and it is live — no environment variable needed.
+
+Optional alternates:
 
 1. **GitHub Releases** — run the `android-release` workflow (repo → Actions →
    android-release → Run), or push a `v*` tag. It builds and attaches the APK
-   to a release; use that release asset URL.
-2. **Self-hosted** — copy the APK to the platform's `public/downloads/`
-   folder; the URL is `https://<your-site>/downloads/holistic-companion.apk`.
+   to a release.
+2. **External hosting** — host the APK anywhere over HTTPS and set
+   `NEXT_PUBLIC_COMPANION_APK_URL=<the https URL>` in the platform `.env`; the
+   QR and Download button pick it up after a restart.
 
-Then set the URL in the platform `.env`:
+The server URL shown on the app's pairing screen can be pre-filled at build
+time: `gradle assembleRelease -PserverUrl="https://<your-site>"`.
 
-```
-NEXT_PUBLIC_COMPANION_APK_URL=https://<your-site>/downloads/holistic-companion.apk
-```
+## Build notes (sandbox / CI)
 
-Restart the platform — the Health Data page renders the real QR code and
-enables the Download button.
+- A full JDK is required — headless JREs lack `jlink`, which AGP needs
+  (`JdkImageTransform ... jlink executable does not exist`). Use JDK 17.
+- If Maven Central rate-limits the build network (HTTP 429), add
+  `--init-script ../scripts/gradle-mirror-init.gradle` to route resolution
+  through the Aliyun mirror (project files stay untouched).
 
 ## Mi Fitness / Redmi Watch 5 Lite notes
 

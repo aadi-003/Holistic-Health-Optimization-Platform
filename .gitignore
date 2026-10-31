@@ -10,3 +10,4 @@ download/
 android-companion/keystore.properties
 android-companion/release.keystore
 android-companion/app/release.keystore
+.next/
