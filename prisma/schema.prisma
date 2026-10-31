@@ -1,0 +1,214 @@
+// Holistic — Holistic Health Optimization Platform
+// Prisma schema. SQLite for local development; the schema is written to be
+// portable to PostgreSQL for deployment (no SQLite-only types are used).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile              Profile?
+  prakritiAssessments  PrakritiAssessment[]
+  vikritiAssessments   VikritiAssessment[]
+  combinedAssessments  CombinedAssessment[]
+  healthReadings       HealthReading[]
+  environmentSnapshots EnvironmentSnapshot[]
+  consentRecords       ConsentRecord[]
+  recommendationEvents RecommendationEvent[]
+  healthPairingCodes   HealthPairingCode[]
+  healthCompanionDevices HealthCompanionDevice[]
+}
+
+model Profile {
+  id             String  @id @default(cuid())
+  userId         String  @unique
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  age            Int?
+  gender         String?
+  city           String?
+  heightCm       Float?
+  weightKg       Float?
+  dietPreference String?
+  wakeTime       String?
+  bedTime        String?
+  onboardedAt    DateTime?
+  updatedAt      DateTime @updatedAt
+}
+
+// Baseline constitution assessment. Completed assessments are immutable:
+// a new submission always inserts a new row (history is never overwritten).
+model PrakritiAssessment {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrumentId   String // e.g. "prakriti_62_charaka_v1"
+  scoringVersion String // e.g. "guna_proportional_absolute_v1"
+  answersJson    String // JSON: { [questionId]: "yes" | "no" }
+  vataScore      Int
+  pittaScore     Int
+  kaphaScore     Int
+  vataPct        Float
+  pittaPct       Float
+  kaphaPct       Float
+  classification String // e.g. "vata_pitta" | "pitta" | "sama"
+  label          String
+  createdAt      DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// Current-state (vikriti) assessment. Scoring is the platform's own
+// experimental method (the source questionnaire documents no numeric formula).
+model VikritiAssessment {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrumentId   String // e.g. "vikriti_34_v1"
+  scoringVersion String // e.g. "experimental_binary_v1"
+  answersJson    String // JSON: { [questionId]: "yes" | "no" }
+  vataCount      Int
+  pittaCount     Int
+  kaphaCount     Int
+  vataPct        Float
+  pittaPct       Float
+  kaphaPct       Float
+  dominant       String
+  createdAt      DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// Experimental 50/30/20 combined current-state result.
+model CombinedAssessment {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  modelVersion   String // e.g. "combined_50_30_20_experimental_v1"
+  combinedScore  Float
+  dominantDosha  String
+  qContribution  Float
+  wContribution  Float
+  eContribution  Float
+  confidence     Float
+  breakdownJson  String // full calculation explanation payload
+  createdAt      DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// All health measurements (smartwatch / manual / reference-estimated) in one
+// ledger with an explicit provenance flag, per the research report's
+// estimate-vs-measured rule (report Ch. 8.2, 8.5).
+model HealthReading {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metric      String // heart_rate | resting_heart_rate | hrv_rmssd | sleep_duration | steps | active_minutes | spo2 | active_calories | distance | sleep_stage_*
+  value       Float
+  unit        String
+  provenance  String // measured | manual | estimated | simulated
+  source      String // e.g. "google_fit", "health_connect:com.xiaomi.wearable", "bluetooth:Galaxy Watch", "manual_entry", "reference_average:umeetani1998"
+  recordedAt  DateTime // day/period the reading belongs to
+  createdAt   DateTime @default(now())
+
+  @@index([userId, metric, recordedAt])
+}
+
+model EnvironmentSnapshot {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source      String // location | city | manual
+  city        String?
+  latitude    Float?
+  longitude   Float?
+  temperatureC Float?
+  humidity    Float?
+  condition   String?
+  season      String // classical ritu (vasanta, greeshma, ...)
+  recordedAt  DateTime @default(now())
+
+  @@index([userId, recordedAt])
+}
+
+model ConsentRecord {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String // wearable_sync | location | data_processing
+  scope     String? // e.g. "heart_rate,sleep,steps"
+  granted   Boolean
+  grantedAt DateTime  @default(now())
+  revokedAt DateTime?
+}
+
+model RecommendationEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ruleId      String
+  category    String
+  evidence    String
+  payloadJson String
+  feedback    String? // helpful | not_helpful
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// Android companion app pairing. The web Health Data section creates a
+// single-use, short-lived code; the companion app exchanges it for a scoped,
+// revocable sync token. Codes are stored hashed — the raw value is shown once
+// on the website and typed into the app.
+model HealthPairingCode {
+  id          String    @id @default(cuid())
+  codeHash    String    @unique // sha256(code)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  usedAt      DateTime?
+  attempts    Int       @default(0) // failed completion attempts against this code
+  deviceLabel String? // filled by the companion app on successful completion
+
+  @@index([userId, createdAt])
+}
+
+// A paired Android companion installation. Stores a sha256 hash of its sync
+// token (the raw token is returned once at pairing and kept in the app's
+// encrypted preferences), plus sync bookkeeping and the Health Connect data
+// origins (writing apps, e.g. Mi Fitness) the device actually reported.
+model HealthCompanionDevice {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash       String    @unique
+  label           String
+  model           String?
+  osVersion       String?
+  appVersion      String?
+  permissionsJson String? // JSON array of Health Connect permission keys last reported
+  originsJson     String? // JSON array of Health Connect dataOrigin package names last reported
+  createdAt       DateTime  @default(now())
+  lastSyncAt      DateTime?
+  lastSyncStatus  String? // success | partial | error
+  lastSyncMessage String?
+  lastSyncCreated Int?
+  lastSyncTotal   Int?
+  syncRequestedAt DateTime? // set by the web "Sync Now" button, consumed by the app's poll
+  revokedAt       DateTime?
+
+  @@index([userId])
+}

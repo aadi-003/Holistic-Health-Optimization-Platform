@@ -1,0 +1,168 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-vata: var(--vata);
+  --color-pitta: var(--pitta);
+  --color-kapha: var(--kapha);
+  --color-sage: var(--sage);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.75rem;
+  /* Warm, calm wellness palette — paper background, sage/forest greens */
+  --background: #f7f6f1;
+  --foreground: #26302b;
+  --card: #ffffff;
+  --card-foreground: #26302b;
+  --popover: #ffffff;
+  --popover-foreground: #26302b;
+  --primary: #2e6b46;
+  --primary-foreground: #f6fbf7;
+  --secondary: #eef3ec;
+  --secondary-foreground: #2e4a3a;
+  --muted: #f0efe8;
+  --muted-foreground: #6d7a72;
+  --accent: #e7f0e7;
+  --accent-foreground: #23503a;
+  --destructive: #b3403a;
+  --border: #e4e5da;
+  --input: #e4e5da;
+  --ring: #2e6b46;
+  --chart-1: #0e9bb5;
+  --chart-2: #e0912f;
+  --chart-3: #4f9d5f;
+  --chart-4: #7a6ff0;
+  --chart-5: #d16a7c;
+  /* Dosha identity colours */
+  --vata: #0e9bb5;
+  --pitta: #e0912f;
+  --kapha: #4f9d5f;
+  --sage: #2e6b46;
+  --sidebar: #fbfbf7;
+  --sidebar-foreground: #3c4a42;
+  --sidebar-primary: #2e6b46;
+  --sidebar-primary-foreground: #f6fbf7;
+  --sidebar-accent: #e7f0e7;
+  --sidebar-accent-foreground: #23503a;
+  --sidebar-border: #e7e8dc;
+  --sidebar-ring: #2e6b46;
+}
+
+.dark {
+  --background: #17201b;
+  --foreground: #e8ece8;
+  --card: #1e2a23;
+  --card-foreground: #e8ece8;
+  --popover: #1e2a23;
+  --popover-foreground: #e8ece8;
+  --primary: #5fa878;
+  --primary-foreground: #10201a;
+  --secondary: #24332b;
+  --secondary-foreground: #dbe6dc;
+  --muted: #243028;
+  --muted-foreground: #93a29a;
+  --accent: #25382c;
+  --accent-foreground: #cfe4d2;
+  --destructive: #e07b74;
+  --border: #2c3a31;
+  --input: #2c3a31;
+  --ring: #5fa878;
+  --chart-1: #35b4cb;
+  --chart-2: #e8a856;
+  --chart-3: #6cbb7d;
+  --chart-4: #9791f5;
+  --chart-5: #e08a9a;
+  --vata: #35b4cb;
+  --pitta: #e8a856;
+  --kapha: #6cbb7d;
+  --sage: #5fa878;
+  --sidebar: #141c17;
+  --sidebar-foreground: #c7d2c8;
+  --sidebar-primary: #5fa878;
+  --sidebar-primary-foreground: #10201a;
+  --sidebar-accent: #24352a;
+  --sidebar-accent-foreground: #cfe4d2;
+  --sidebar-border: #263229;
+  --sidebar-ring: #5fa878;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04";
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 22%, transparent);
+  }
+}
+
+/* Slim, calm scrollbars for long panels */
+.holistic-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.holistic-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
+  border-radius: 8px;
+}
+.holistic-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Gentle entrance for screen content */
+@keyframes holistic-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-up {
+  animation: holistic-fade-up 0.35s ease-out both;
+}

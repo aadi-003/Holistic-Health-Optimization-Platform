@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Holistic Health Connect</string>
+    <string name="rationale_title">How Holistic uses your health data</string>
+    <string name="rationale_body">
+        Holistic Health Connect reads your Health Connect records (steps, heart rate, resting heart rate,
+        sleep, active calories, distance, exercise sessions, SpO2 and HRV where available) and syncs them
+        to your Holistic Health Optimization Platform account. Data is sent only to the server you pair
+        with, over HTTPS, and is never sold or shared. You can disconnect at any time from the website,
+        which also deletes the readings that were synced.
+    </string>
+</resources>
