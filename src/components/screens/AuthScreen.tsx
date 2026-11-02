@@ -59,7 +59,7 @@ export default function AuthScreen() {
             {[
               "Prakriti — your baseline constitution",
               "Vikriti — your current state",
-              "Google Fit, smartwatch and environment context",
+              "Smartwatch, manual readings and environment context",
               "Daily Ayurvedic routine and diet suggestions",
             ].map((t) => (
               <li key={t} className="flex items-start gap-2.5">

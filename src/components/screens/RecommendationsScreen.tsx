@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Panel, Spinner } from "@/components/holistic/shared";
+import { Panel, Spinner, DOSHA_SYMBOLS } from "@/components/holistic/shared";
 import { api } from "@/lib/client-api";
 import { ChevronDown } from "lucide-react";
 
@@ -13,6 +13,8 @@ interface Rec {
   sanskritIast: string;
   english: string;
   recommendation: string;
+  steps: string[];
+  doshaFocus: string | null;
   why: string;
   evidenceLevel: string;
   applicability: string;
@@ -98,12 +100,21 @@ export default function RecommendationsScreen() {
         <div className="space-y-4">
           {visible.map((rec) => {
             const expanded = open === rec.ruleId;
+            const symbol = rec.doshaFocus ? DOSHA_SYMBOLS[rec.doshaFocus as keyof typeof DOSHA_SYMBOLS] : null;
             return (
               <Panel key={rec.ruleId} className="p-0">
                 <div className="p-5 sm:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
+                        {symbol && (
+                          <span
+                            className="rounded-full bg-muted px-2 py-0.5 text-sm leading-none"
+                            title={`Targets your ${rec.doshaFocus} state`}
+                          >
+                            {symbol}
+                          </span>
+                        )}
                         <span className="text-xl leading-none">{rec.sanskritDeva}</span>
                         <span className="text-sm font-medium text-muted-foreground italic">{rec.sanskritIast}</span>
                       </div>
@@ -112,7 +123,15 @@ export default function RecommendationsScreen() {
                     </div>
                   </div>
 
-                  <p className="mt-4 text-sm leading-relaxed">{rec.recommendation}</p>
+                  {/* What to do — short actionable steps only. */}
+                  <ul className="mt-4 space-y-1.5">
+                    {rec.steps.map((step, i) => (
+                      <li key={i} className="flex gap-2 text-sm leading-relaxed">
+                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ul>
 
                   <button
                     type="button"
@@ -125,7 +144,10 @@ export default function RecommendationsScreen() {
                   </button>
 
                   {expanded && (
-                    <p className="mt-2 border-t pt-3 text-xs leading-relaxed text-muted-foreground">{rec.why}</p>
+                    <div className="mt-2 space-y-2 border-t pt-3 text-xs leading-relaxed text-muted-foreground">
+                      <p>{rec.recommendation}</p>
+                      <p>{rec.why}</p>
+                    </div>
                   )}
                 </div>
               </Panel>

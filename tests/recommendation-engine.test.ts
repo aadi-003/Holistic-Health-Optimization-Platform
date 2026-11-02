@@ -68,7 +68,7 @@ describe("Rule evaluation — three-valued logic and missing inputs", () => {
     const { shown, withheld } = evaluateRules(ctx());
     expect(shown.find((s) => s.rule.ruleId === "DIN-002")).toBeUndefined();
     const din2 = withheld.find((w) => w.rule.ruleId === "DIN-002");
-    expect(din2?.reason).toMatch(/waiting for/i);
+    expect(din2 && din2.status === "withheld" ? din2.reason : "").toMatch(/waiting for/i);
   });
 
   it("shows general education rules without any data", () => {
@@ -109,7 +109,7 @@ describe("Rule evaluation — three-valued logic and missing inputs", () => {
   it("withholds the recovery rule when RHR data is missing", () => {
     const { withheld } = evaluateRules(ctx());
     const vya4 = withheld.find((w) => w.rule.ruleId === "VYA-004");
-    expect(vya4?.reason).toMatch(/waiting for/i);
+    expect(vya4 && vya4.status === "withheld" ? vya4.reason : "").toMatch(/waiting for/i);
   });
 
   it("activates the ritu-sandhi rule only inside the junction window", () => {
@@ -129,6 +129,10 @@ describe("Rule evaluation — three-valued logic and missing inputs", () => {
     }));
     const { shown } = evaluateRules(ctx({ readings }));
     const education = shown.find((s) => s.rule.ruleId === "DIN-001");
-    expect(education?.because.some((b) => b.includes("precedence"))).toBe(true);
+    expect(
+      education && education.status === "shown"
+        ? education.because.some((b) => b.includes("precedence"))
+        : false
+    ).toBe(true);
   });
 });

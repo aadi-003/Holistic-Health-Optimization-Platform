@@ -7,17 +7,14 @@
       Health Connect read permissions. REQUIRED: Health Connect only grants
       permissions the app declares here — the runtime permission dialog only
       lists manifest-declared permissions and silently returns "not granted"
-      for anything else. Keep in sync with HealthConnectManager.PERMISSIONS.
+      for anything else. Keep in sync with HealthConnectManager.PERMISSIONS
+      (heart rate, SpO2, steps, active calories, sleep only).
     -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
-    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
     <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
-    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
-    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
-    <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
 
     <application
         android:label="@string/app_name"

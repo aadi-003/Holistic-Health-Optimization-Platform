@@ -58,17 +58,14 @@ interface HistoryResponse {
   total: number;
 }
 
-/** Data types the companion app requests from Health Connect. */
+/** Data types the companion app requests from Health Connect (v1.2.0 — five types;
+ *  stress, sleep quality and mood are manual entries, not Health Connect records). */
 const EXPECTED_TYPES = [
   { key: "steps", label: "Steps" },
   { key: "heart_rate", label: "Heart rate" },
-  { key: "resting_heart_rate", label: "Resting heart rate" },
   { key: "sleep_duration", label: "Sleep" },
   { key: "active_calories", label: "Active calories" },
-  { key: "distance", label: "Distance" },
-  { key: "active_minutes", label: "Exercise / active minutes" },
   { key: "spo2", label: "SpO2" },
-  { key: "hrv_rmssd", label: "HRV" },
 ];
 
 const PERMISSION_LABEL: Record<string, string> = {
@@ -294,8 +291,9 @@ export default function WearablesScreen() {
                 </div>
                 <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
                   Requires Android 9+ with Health Connect (built into Android 14+ — on Android 9–13,
-                  install it from the Play Store). The app reads whatever health data your phone apps
-                  share with Health Connect: steps, heart rate, sleep, calories, distance, SpO2 and more.
+                  install it from the Play Store). The app reads exactly five data types from Health
+                  Connect: steps, heart rate, blood oxygen (SpO2), active calories and sleep. Stress,
+                  sleep quality and mood are optional manual entries on the Manual Entry page.
                 </p>
               </div>
             </div>

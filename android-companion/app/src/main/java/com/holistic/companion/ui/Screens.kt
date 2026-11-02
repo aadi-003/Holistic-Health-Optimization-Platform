@@ -52,8 +52,8 @@ import kotlinx.coroutines.launch
  */
 
 private val DATA_TYPES = listOf(
-    "Steps", "Heart rate", "Resting heart rate", "Sleep (incl. stages)",
-    "Active calories", "Distance", "Exercise sessions", "SpO2", "HRV (RMSSD)",
+    "Steps", "Heart rate", "Blood oxygen (SpO2)",
+    "Active calories", "Sleep (incl. stages)",
 )
 
 /** Screen keys for the simple state-machine navigation. */

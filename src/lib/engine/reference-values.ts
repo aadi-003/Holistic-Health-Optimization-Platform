@@ -13,9 +13,13 @@ export type MetricKey =
   | "resting_heart_rate"
   | "hrv_rmssd"
   | "sleep_duration"
+  | "sleep_quality"
   | "steps"
   | "active_minutes"
-  | "spo2";
+  | "active_calories"
+  | "spo2"
+  | "stress_level"
+  | "mood";
 
 export interface MetricMeta {
   key: MetricKey;
@@ -77,6 +81,50 @@ export const METRICS: Record<MetricKey, MetricMeta> = {
     evidenceStatus: "Consumer trackers estimate sleep duration well (sleep sensitivity 0.93-0.96, report Ch. 8.1 [14]); stages are far less reliable.",
     purpose: "Hours slept — recovery indicator.",
   },
+  sleep_quality: {
+    key: "sleep_quality",
+    label: "Sleep quality",
+    unit: "1-5",
+    referenceAverage: null,
+    referenceSource: "Self-reported scale (1 = poor, 5 = excellent). Not available from Health Connect.",
+    normalRange: [1, 5],
+    normalRangeSource: "Platform design proposal — subjective scale.",
+    evidenceStatus: "Subjective self-report; manual entry only (optional).",
+    purpose: "How restful your sleep felt — manual, optional.",
+  },
+  stress_level: {
+    key: "stress_level",
+    label: "Stress level",
+    unit: "1-5",
+    referenceAverage: null,
+    referenceSource: "Self-reported scale (1 = calm, 5 = very stressed). Health Connect has no stress record type.",
+    normalRange: [1, 5],
+    normalRangeSource: "Platform design proposal — subjective scale.",
+    evidenceStatus: "Subjective self-report; manual entry only (optional). No wearable stress metric exists.",
+    purpose: "How stressed you feel — manual, optional.",
+  },
+  mood: {
+    key: "mood",
+    label: "Mood",
+    unit: "1-5",
+    referenceAverage: null,
+    referenceSource: "Self-reported scale (1 = low, 5 = excellent).",
+    normalRange: [1, 5],
+    normalRangeSource: "Platform design proposal — subjective scale.",
+    evidenceStatus: "Subjective self-report; manual entry only (optional); display only — not scored.",
+    purpose: "How you feel overall — manual, optional.",
+  },
+  active_calories: {
+    key: "active_calories",
+    label: "Active calories",
+    unit: "kcal",
+    referenceAverage: 300,
+    referenceSource: "Common smartwatch active-energy goal band (250-500 kcal/day); platform design proposal.",
+    normalRange: [250, 500],
+    normalRangeSource: "Typical activity-goal framing; highly individual.",
+    evidenceStatus: "Energy expenditure is the least accurate wearable estimate (Fuller et al. 2020, [19]); used as a rough activity dose.",
+    purpose: "Active energy burned — activity dose.",
+  },
   steps: {
     key: "steps",
     label: "Steps",
@@ -132,10 +180,41 @@ export function hrvReferenceAverage(age: number | null | undefined): number {
   return ageBandReference(age);
 }
 
-/** Metrics considered by the wearable (30%) component of the combined model. */
+/**
+ * Metrics scored by the health-data (30%) component of the combined vikriti
+ * model, with their FIXED weights (sum = 100). Weights are a documented
+ * design proposal — they never change per user or per run.
+ */
 export const COMBINED_WEARABLE_METRICS: MetricKey[] = [
   "sleep_duration",
-  "resting_heart_rate",
-  "hrv_rmssd",
+  "heart_rate",
+  "spo2",
+  "active_calories",
   "steps",
+  "stress_level",
+  "sleep_quality",
 ];
+
+/** The seven parameters scored inside the health-data (30%) block. */
+export type HealthScoreKey =
+  | "sleep_duration"
+  | "heart_rate"
+  | "spo2"
+  | "active_calories"
+  | "steps"
+  | "stress_level"
+  | "sleep_quality";
+
+/** Fixed weight of each health-data parameter inside the 30% block (sum 100). */
+export const HEALTH_WEIGHTS: Record<HealthScoreKey, number> = {
+  sleep_duration: 20,
+  heart_rate: 15,
+  spo2: 10,
+  active_calories: 15,
+  steps: 15,
+  stress_level: 15,
+  sleep_quality: 10,
+};
+
+/** Fixed weights of the environment (20%) block (sum 100). */
+export const ENV_WEIGHTS = { season: 40, temperature: 30, humidity: 30 } as const;

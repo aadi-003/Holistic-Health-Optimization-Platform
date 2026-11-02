@@ -19,11 +19,11 @@ export async function GET(request: Request) {
   });
 
   // Latest reading per metric + provenance coverage.
-  const latest: Record<string, { value: number; unit: string; provenance: string; recordedAt: string; source: string }> = {};
+  const latest: Record<string, { id: string; value: number; unit: string; provenance: string; recordedAt: string; source: string }> = {};
   const provenanceCounts: Record<string, number> = {};
   for (const r of readings) {
     if (!latest[r.metric]) {
-      latest[r.metric] = { value: r.value, unit: r.unit, provenance: r.provenance, recordedAt: r.recordedAt.toISOString(), source: r.source };
+      latest[r.metric] = { id: r.id, value: r.value, unit: r.unit, provenance: r.provenance, recordedAt: r.recordedAt.toISOString(), source: r.source };
     }
     provenanceCounts[r.provenance] = (provenanceCounts[r.provenance] ?? 0) + 1;
   }
@@ -73,7 +73,11 @@ export async function POST(request: Request) {
     sleep_duration: [0, 24],
     steps: [0, 200000],
     active_minutes: [0, 1440],
+    active_calories: [0, 10000],
     spo2: [50, 100],
+    stress_level: [1, 5],
+    sleep_quality: [1, 5],
+    mood: [1, 5],
   };
   const [min, max] = limits[metric] ?? [0, 1000000];
   if (value < min || value > max) {

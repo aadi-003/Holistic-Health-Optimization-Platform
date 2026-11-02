@@ -6,6 +6,13 @@ import { cn } from "@/lib/utils";
 
 /* ---------------- Dosha donut (Prakriti / Vikriti results) ---------------- */
 
+/** Small visual anchors: one glyph per dosha, used sparingly across the app. */
+export const DOSHA_SYMBOLS: Record<"vata" | "pitta" | "kapha", string> = {
+  vata: "💨",
+  pitta: "🔥",
+  kapha: "💧",
+};
+
 export function DoshaDonut({
   vata,
   pitta,
@@ -89,7 +96,9 @@ export function DoshaLegend({
       {rows.map((r) => (
         <div key={r.name} className="flex items-center gap-2.5">
           <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: r.color }} />
-          <span className="text-sm font-medium">{r.name}</span>
+          <span className="text-sm font-medium">
+            {DOSHA_SYMBOLS[r.name.toLowerCase() as keyof typeof DOSHA_SYMBOLS]} {r.name}
+          </span>
           <span className="ml-auto text-sm tabular-nums text-muted-foreground">{r.value}%</span>
         </div>
       ))}
@@ -119,7 +128,9 @@ export function DoshaStackBar({ vata, pitta, kapha }: { vata: number; pitta: num
         {seg.map((s) => (
           <span key={s.name} className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
-            <span className="font-medium">{s.name}</span>
+            <span className="font-medium">
+              {DOSHA_SYMBOLS[s.name.toLowerCase() as keyof typeof DOSHA_SYMBOLS]} {s.name}
+            </span>
             <span className="text-muted-foreground tabular-nums" title="Absolute-basis percentage (obtained ÷ that dosha's maximum)">
               {Math.round(s.value * 10) / 10}%
             </span>

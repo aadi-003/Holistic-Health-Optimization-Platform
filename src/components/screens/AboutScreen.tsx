@@ -23,6 +23,7 @@ export default function AboutScreen() {
                     {r.url.replace(/^https?:\/\//, "").slice(0, 60)}
                   </a>
                 )}
+                <span className="mt-1 block rounded-md bg-muted/60 px-2 py-1 text-[11px] text-muted-foreground">{r.usedFor}</span>
               </span>
             </li>
           ))}

@@ -26,9 +26,26 @@ interface VikritiRecord {
 interface Combined {
   combinedScore: number;
   questionnaire: { contribution: number };
-  wearable: { contribution: number; balanceScore: number; dataCompleteness: number; subScores: { metric: string; label: string; value: number; provenance: string; score: number; formula: string }[] };
-  environment: { contribution: number; temperatureC: number | null; humidity: number | null; seasonLabel: string; rituSandhi: boolean; tendencyDoshas: string[] };
+  wearable: {
+    contribution: number;
+    balanceScore: number;
+    assumedCount: number;
+    subScores: { metric: string; label: string; weight: number; value: number | null; assumedNormal: boolean; provenance: string; score: number; formula: string }[];
+  };
+  environment: {
+    contribution: number;
+    assumedNormal: boolean;
+    seasonTerm: number;
+    temperatureTerm: number;
+    humidityTerm: number;
+    temperatureC: number | null;
+    humidity: number | null;
+    seasonLabel: string;
+    rituSandhi: boolean;
+    tendencyDoshas: string[];
+  };
   confidence: number;
+  calculation: string[];
   explanation: string[];
 }
 
@@ -87,11 +104,11 @@ export default function VikritiResultScreen() {
 
   const latest = history[0];
 
-  // Tiny per-component explainers: how the value enters the scale + scale meaning.
+  // Tiny per-component explainers: fixed weights + scale meaning.
   const COMPONENT_NOTES: Record<string, string> = {
     q: "% of signs ticked for your top dosha (9 of 13 Vata signs → 69). Scale: 0-100, higher = more imbalance signs.",
-    w: "strain = 100 − average balance of your last-7-day readings vs normal ranges. Scale: 0-100, higher = further from normal.",
-    e: "weather term (cold/dry→Vata, hot/humid→Pitta, cold/damp→Kapha) + 25 if season aggravates your top dosha + 10 at junctions. Scale: 0-100, higher = climate aggravates your top dosha. 0 with data present = your climate is neutral for it.",
+    w: "Fixed weights: sleep 20 · heart rate 15 · SpO2 10 · calories 15 · steps 15 · stress 15 · sleep quality 10. No reading for a parameter = assumed normal healthy level (no strain). Scale: 0-100, higher = further from normal.",
+    e: "Fixed weights: season 40 · temperature 30 · humidity 30, each scored against your top dosha (cold/dry→Vata, hot/humid→Pitta, cold/damp→Kapha). Scale: 0-100, higher = climate aggravates your top dosha. 0 with data present = your climate is neutral for it.",
   };
 
   const DOSHA_FORMULA: Record<string, string> = {
@@ -166,7 +183,8 @@ export default function VikritiResultScreen() {
           <div>
             <h2 className="font-semibold tracking-tight">Combined result (50/30/20)</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Check-in 50% · health data 30% · environment 20%. Components without data count as 0. Live values — new environment or health data applies on the next view.
+              Check-in 50% · health data 30% (fixed weights per parameter) · environment 20% (fixed weights).
+              Parameters without data count as a normal healthy level. Live values — new environment or health data applies on the next view.
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={recompute} disabled={busy}>
@@ -192,8 +210,8 @@ export default function VikritiResultScreen() {
               <div className="grid gap-3 sm:grid-cols-3 lg:col-span-4">
                 {[
                   { key: "q", label: "Check-in (50%)", value: combined.questionnaire.contribution, note: "from your check-in answers", color: "#2e6b46" },
-                  { key: "w", label: "Health data strain (30%)", value: combined.wearable.contribution, note: combined.wearable.subScores.length > 0 ? `balance ${combined.wearable.balanceScore}/100` : "no readings in the last 7 days", color: "#0e9bb5" },
-                  { key: "e", label: "Environment (20%)", value: combined.environment.contribution, note: envNote(combined.environment), color: "#e0912f" },
+                  { key: "w", label: "Health data (30%)", value: combined.wearable.contribution, note: combined.wearable.assumedCount > 0 ? `balance ${combined.wearable.balanceScore}/100 · ${combined.wearable.assumedCount} assumed normal` : `balance ${combined.wearable.balanceScore}/100`, color: "#0e9bb5" },
+                  { key: "e", label: "Environment (20%)", value: combined.environment.contribution, note: combined.environment.assumedNormal ? "no snapshot — assumed neutral" : envNote(combined.environment), color: "#e0912f" },
                 ].map((b) => (
                   <div key={b.key} className="flex flex-col rounded-lg border p-4">
                     <div className="text-xs font-medium text-muted-foreground">{b.label}</div>
@@ -210,34 +228,36 @@ export default function VikritiResultScreen() {
 
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
               <div className="rounded-lg border p-4">
-                <h3 className="text-sm font-semibold">Health data sub-scores</h3>
-                {combined.wearable.subScores.length === 0 ? (
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    No readings in the last 7 days. Connect Google Fit or a watch in Health Data, or enter readings manually.
-                  </p>
-                ) : (
-                  <div className="mt-3 space-y-3">
-                    {combined.wearable.subScores.map((s) => (
-                      <div key={s.metric}>
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2.5">
-                            <span className="text-sm font-medium">{s.label}</span>
+                <h3 className="text-sm font-semibold">Health data sub-scores (fixed weights)</h3>
+                <div className="mt-3 space-y-3">
+                  {combined.wearable.subScores.map((s) => (
+                    <div key={s.metric}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="w-9 shrink-0 rounded bg-muted px-1 py-0.5 text-center font-mono text-[10px] text-muted-foreground" title="Fixed weight within the 30% block">{s.weight}%</span>
+                          <span className="truncate text-sm font-medium">{s.label}</span>
+                          {s.assumedNormal ? (
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground" title="No reading in the last 7 days — assumed at a normal healthy level">assumed normal</span>
+                          ) : (
                             <ProvenanceBadge provenance={s.provenance} />
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm tabular-nums text-muted-foreground">{s.value} → {s.score}/100</span>
-                            <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
-                              <div className="h-full rounded-full bg-primary" style={{ width: `${s.score}%` }} />
-                            </div>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-3">
+                          <span className="text-sm tabular-nums text-muted-foreground">
+                            {s.assumedNormal ? "—" : s.value} → {s.score}/100
+                          </span>
+                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                            <div className="h-full rounded-full bg-primary" style={{ width: `${s.score}%` }} />
                           </div>
                         </div>
-                        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{s.formula}</p>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <p className="mt-1 pl-11 text-[11px] leading-relaxed text-muted-foreground">{s.formula}</p>
+                    </div>
+                  ))}
+                </div>
                 <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                  Each reading is scored against its reference range. SpO2 is display-only.
+                  Balance = Σ(weight × score) ÷ 100. Parameters without a reading in the last 7 days are
+                  assumed at a normal healthy level (score 100) — they add no strain.
                 </p>
               </div>
 
@@ -252,6 +272,23 @@ export default function VikritiResultScreen() {
                   ))}
                 </ol>
               </div>
+            </div>
+
+            {/* How this was calculated — the arithmetic, verbatim. */}
+            <div className="mt-5 rounded-lg border bg-muted/30 p-4">
+              <h3 className="text-sm font-semibold">How this was calculated</h3>
+              <div className="mt-3 space-y-2">
+                {combined.calculation.map((line, i) => (
+                  <p key={i} className="rounded-md bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+                    {line}
+                  </p>
+                ))}
+              </div>
+              <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+                Weights are fixed design proposals: check-in 50% · health data 30% (sleep 20, heart rate 15,
+                SpO2 10, calories 15, steps 15, stress 15, sleep quality 10) · environment 20% (season 40,
+                temperature 30, humidity 30).
+              </p>
             </div>
 
             {combinedHistory.length > 1 && (

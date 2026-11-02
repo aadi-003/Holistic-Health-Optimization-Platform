@@ -11,23 +11,30 @@ import { fmtDateTime } from "@/lib/store";
 import { toast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
 
-interface Reading {
+interface LatestReading {
   id: string;
   metric: string;
   value: number;
   unit: string;
   provenance: string;
   recordedAt: string;
+  source: string;
 }
 
 const METRIC_KEYS = Object.keys(METRICS);
 
+/** Subjective 1-5 metrics — always optional, never prefilled. */
+const SUBJECTIVE_METRICS = ["stress_level", "sleep_quality", "mood"];
+
 /** Range notes for metrics without a fixed normal range. */
 const RANGE_NOTE: Record<string, string> = {
   hrv_rmssd: "Typical adult ≈ 42 ms (drops with age)",
+  stress_level: "1 = calm · 5 = very stressed (optional)",
+  sleep_quality: "1 = poor · 5 = excellent (optional)",
+  mood: "1 = low · 5 = excellent (optional)",
 };
 
-/** Natural average values used to prefill the inputs (editable). */
+/** Natural average values used to prefill the objective inputs (editable). */
 const DEFAULTS: Record<string, string> = {
   heart_rate: "70",
   resting_heart_rate: "70",
@@ -35,21 +42,26 @@ const DEFAULTS: Record<string, string> = {
   sleep_duration: "7.5",
   steps: "5000",
   active_minutes: "30",
+  active_calories: "300",
   spo2: "97",
 };
 
 export default function ManualEntryScreen() {
-  const [readings, setReadings] = useState<Reading[] | null>(null);
+  const [latest, setLatest] = useState<LatestReading[] | null>(null);
   const [values, setValues] = useState<Record<string, string>>(() => ({ ...DEFAULTS }));
   const [busy, setBusy] = useState(false);
 
   async function load() {
-    const d = await api<{ readings: Reading[] }>("/api/readings?days=30");
-    setReadings(d.readings);
+    const d = await api<{ latest: Record<string, Omit<LatestReading, "metric">> }>("/api/readings?days=30");
+    // One row per metric: the most recent entry of each, in catalogue order.
+    const rows: LatestReading[] = METRIC_KEYS
+      .filter((k) => d.latest[k])
+      .map((k) => ({ metric: k, ...d.latest[k] }));
+    setLatest(rows);
   }
 
   useEffect(() => {
-    load().catch(() => setReadings([]));
+    load().catch(() => setLatest([]));
   }, []);
 
   async function submit(e: React.FormEvent) {
@@ -84,7 +96,8 @@ export default function ManualEntryScreen() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Manual health data</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Today&apos;s values, prefilled with typical adult averages — edit anything, blank fields are skipped.
+          Objective fields are prefilled with typical adult averages; stress, sleep quality and mood are
+          subjective — enter them when you like, blank fields are skipped, nothing is compulsory.
         </p>
       </div>
 
@@ -93,20 +106,25 @@ export default function ManualEntryScreen() {
           <div className="grid gap-x-8 gap-y-5 p-6 sm:grid-cols-2">
             {METRIC_KEYS.map((key) => {
               const meta = METRICS[key as keyof typeof METRICS];
+              const subjective = SUBJECTIVE_METRICS.includes(key);
               return (
                 <div key={key} className="space-y-1.5">
                   <Label htmlFor={`m-${key}`}>
                     {meta.label} <span className="text-muted-foreground">({meta.unit})</span>
+                    {subjective && <span className="ml-1.5 text-xs text-muted-foreground">· optional</span>}
                   </Label>
                   <Input
                     id={`m-${key}`}
                     type="number"
-                    step="any"
-                    inputMode="decimal"
+                    step={subjective ? "1" : "any"}
+                    inputMode={subjective ? "numeric" : "decimal"}
+                    min={subjective ? 1 : undefined}
+                    max={subjective ? 5 : undefined}
+                    placeholder={subjective ? "1-5" : undefined}
                     value={values[key] ?? ""}
                     onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
                   />
-                  {meta.normalRange ? (
+                  {meta.normalRange && !subjective ? (
                     <p className="text-xs text-muted-foreground">
                       Normal {meta.normalRange[0]}–{meta.normalRange[1]} {meta.unit}
                     </p>
@@ -125,11 +143,14 @@ export default function ManualEntryScreen() {
 
       <Panel className="p-0">
         <div className="border-b px-6 py-4">
-          <h2 className="font-semibold">Recent readings (30 days)</h2>
+          <h2 className="font-semibold">Latest entry (one per metric)</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Only your most recent value for each input — earlier history stays in your snapshots.
+          </p>
         </div>
-        {!readings ? (
+        {!latest ? (
           <Spinner label="Loading readings…" />
-        ) : readings.length === 0 ? (
+        ) : latest.length === 0 ? (
           <p className="px-6 py-10 text-center text-sm text-muted-foreground">No readings yet — save your first values above.</p>
         ) : (
           <div className="holistic-scroll max-h-96 overflow-y-auto">
@@ -144,8 +165,8 @@ export default function ManualEntryScreen() {
                 </tr>
               </thead>
               <tbody>
-                {readings.map((r) => (
-                  <tr key={r.id} className="border-b last:border-0">
+                {latest.map((r) => (
+                  <tr key={r.metric} className="border-b last:border-0">
                     <td className="px-6 py-2.5 font-medium">{METRICS[r.metric as keyof typeof METRICS]?.label ?? r.metric}</td>
                     <td className="px-6 py-2.5 tabular-nums">{r.value.toLocaleString("en-US")} {r.unit}</td>
                     <td className="px-6 py-2.5"><ProvenanceBadge provenance={r.provenance} /></td>

@@ -1,35 +1,26 @@
 /**
- * Experimental combined current-state model (50/30/20).
+ * Combined current-state vikriti model (50/30/20, fixed weights v3).
  *
- * STATUS: this combined model is a PLATFORM DESIGN PROPOSAL requested by the
- * project brief. No reviewed research justifies these weights; the research
- * report itself states that no reviewed study supports merging questionnaire,
- * wearable and environmental inputs into one score, and that no wearable
- * variable measures a dosha. The implementation therefore:
+ * User-specified design (replaces the v2 "exclude missing" rule):
  *
- *   - keeps the three contributions separately visible with their weights;
- *   - never maps wearable variables onto doshas (the wearable contribution is
- *     a dosha-agnostic "physiological strain" component built from deviations
- *     of documented reference ranges);
- *   - maps only the ENVIRONMENT onto doshas, using classical/traditional guna
- *     logic (cold+dry aggravates Vata, heat aggravates Pitta, cold+damp
- *     aggravates Kapha) — labelled classical/traditional;
- *   - emits a data-completeness/confidence indicator;
- *   - is labelled "experimental" everywhere it appears.
+ *   Combined Current State Index (0-100, higher = more imbalance signals)
+ *     = 0.5 x Questionnaire severity   (dominant vikriti dosha %)
+ *     + 0.3 x Health-data strain       (100 - weighted balance, fixed weights)
+ *     + 0.2 x Environmental load       (season/temp/humidity, fixed weights)
  *
- * Combined Current State Index (0-100, higher = more imbalance signals):
- *   = 0.5 x Questionnaire severity      (dominant vikriti dosha %)
- *   + 0.3 x (100 - Wearable balance)    (reference-range deviation index)
- *   + 0.2 x Environmental aggravation   (of the dominant vikriti dosha)
+ * Health-data block — FIXED weights (sum 100), see HEALTH_WEIGHTS:
+ *   sleep 20 · heart rate 15 · SpO2 10 · active calories 15 · steps 15 ·
+ *   stress 15 · sleep quality 10.
+ *   A parameter with no reading is scored as a NORMAL HEALTHY HUMAN
+ *   (balance 100 -> 0 strain) instead of being excluded.
  *
- * Environmental aggravation (v2) is the sum of three interpretable terms:
- *   weather  — guna response of the dominant dosha to the recorded
- *              temperature/humidity (slopes below);
- *   season   — +25 when the current ritu classically aggravates the dominant
- *              dosha (the primary traditional driver);
- *   junction — +10 during ritu-sandhi (seasonal junction) windows.
- * Without a user-recorded environment snapshot the component stays 0 — a
- * season guessed from the date alone is not user data.
+ * Environment block — FIXED weights (sum 100), see ENV_WEIGHTS:
+ *   season 40 · temperature 30 · humidity 30.
+ *   Without a recorded environment snapshot the whole block stays 0
+ *   (assumed neutral), as a date-guessed season is not user data.
+ *
+ * Every weight, score and missing-value assumption is exposed in the
+ * `calculation` payload so the UI can show the arithmetic verbatim.
  */
 
 import type { Dosha } from "@/lib/data/prakriti-questions";
@@ -37,8 +28,9 @@ import { vikritiDominantDosha, type VikritiScore } from "./vikriti-engine";
 import { round2 } from "./prakriti-engine";
 import {
   COMBINED_WEARABLE_METRICS,
+  HEALTH_WEIGHTS,
+  ENV_WEIGHTS,
   METRICS,
-  hrvReferenceAverage,
   type MetricKey,
 } from "./reference-values";
 import { computeSeason, seasonDoshaTendency, SEASON_LABEL, isRituSandhi, type Season } from "./seasonal";
@@ -69,28 +61,39 @@ export interface CombinedResult {
   };
   wearable: {
     contribution: number; // strain 0-100 (weighted at 0.3)
-    balanceScore: number; // 0-100, higher = closer to reference ranges
-    subScores: { metric: MetricKey; label: string; value: number; provenance: string; score: number; formula: string }[];
-    dataCompleteness: number; // 0-1 share of real (non-estimated) inputs
+    balanceScore: number; // 0-100 weighted balance, higher = closer to normal
+    subScores: {
+      metric: MetricKey;
+      label: string;
+      weight: number;
+      value: number | null;
+      assumedNormal: boolean;
+      provenance: string;
+      score: number;
+      formula: string;
+    }[];
+    assumedCount: number; // how many parameters were assumed "normal human"
+    dataCompleteness: number; // 0-1 share of real (non-assumed) inputs
   };
   environment: {
-    contribution: number; // aggravation 0-100 (weighted at 0.2)
-    weatherTerm: number;
-    seasonTerm: number;
-    junctionTerm: number;
+    contribution: number; // 0-100 (weighted at 0.2)
+    assumedNormal: boolean; // true when no snapshot exists -> block contributes 0
+    seasonTerm: number; // 0-100, weighted 40
+    temperatureTerm: number; // 0-100, weighted 30
+    humidityTerm: number; // 0-100, weighted 30
     temperatureC: number | null;
     humidity: number | null;
     season: Season;
     seasonLabel: string;
     rituSandhi: boolean;
     tendencyDoshas: Dosha[];
-    aggravationOfDominant: number;
   };
   confidence: number; // 0-100 data completeness / confidence indicator
+  calculation: string[]; // step-by-step arithmetic shown verbatim in the UI
   explanation: string[];
 }
 
-const MODEL_VERSION = "combined_50_30_20_experimental_v2";
+const MODEL_VERSION = "combined_50_30_20_fixed_weights_v3";
 
 export function computeCombined(
   vikriti: VikritiScore,
@@ -106,8 +109,8 @@ export function computeCombined(
     : 0;
   const qContribution = round2(dominantPct);
 
-  // ---------- Wearable (30%) ----------
-  // 7-day window ending asOf (design-proposal window, documented).
+  // ---------- Health data (30%, fixed weights) ----------
+  // Latest reading per metric inside the 7-day window.
   const windowStart = new Date(asOf.getTime() - 7 * 24 * 3600 * 1000);
   const latestByMetric = new Map<MetricKey, { value: number; provenance: string }>();
   for (const key of COMBINED_WEARABLE_METRICS) {
@@ -124,43 +127,52 @@ export function computeCombined(
 
   for (const key of COMBINED_WEARABLE_METRICS) {
     const found = latestByMetric.get(key);
-    // Missing indicators are EXCLUDED, never imputed: the model only uses
-    // numbers the user actually provided (device or manual entry).
-    if (!found) continue;
-    if (found.provenance === "measured" || found.provenance === "manual") realCount += 1;
+    const assumedNormal = !found;
+    if (found) realCount += 1;
+    // Missing parameter -> assumed normal healthy human -> balance 100.
+    const score = assumedNormal ? 100 : normalizeWearableScore(key, found!.value, age);
     subScores.push({
       metric: key,
       label: METRICS[key].label,
-      value: found.value,
-      provenance: found.provenance,
-      score: normalizeWearableScore(key, found.value, age),
+      weight: HEALTH_WEIGHTS[key],
+      value: found?.value ?? null,
+      assumedNormal,
+      provenance: found?.provenance ?? "assumed",
+      score,
       formula: wearableScoreFormula(key),
     });
   }
 
-  const balanceScore = subScores.length > 0
-    ? round2(subScores.reduce((s, x) => s + x.score, 0) / subScores.length)
-    : 0;
-  const strain = subScores.length > 0 ? round2(100 - balanceScore) : 0;
-  const wContribution = strain;
+  // Weighted balance over the full fixed weight (sum of weights = 100).
+  const weightedSum = subScores.reduce((s, x) => s + x.weight * x.score, 0);
+  const balanceScore = round2(weightedSum / 100);
+  const wContribution = round2(100 - balanceScore);
   const dataCompleteness = round2(realCount / COMBINED_WEARABLE_METRICS.length);
 
-  // ---------- Environment (20%) ----------
+  // ---------- Environment (20%, fixed weights) ----------
   const season = environment?.season ?? computeSeason(asOf, null);
   const tendency = seasonDoshaTendency(season);
   const sandhi = isRituSandhi(asOf, null);
-  // Three interpretable terms (see header doc). Without a real environment
-  // snapshot all terms stay 0 — a season guessed from the date alone is not
-  // user data.
-  let weatherAgg = 0;
-  let seasonAgg = 0;
-  let junctionAgg = 0;
+
+  let seasonTerm = 0;
+  let temperatureTerm = 0;
+  let humidityTerm = 0;
   if (dominant && environment) {
-    weatherAgg = environmentalAggravation(dominant, environment.temperatureC, environment.humidity);
-    if (tendency.includes(dominant)) seasonAgg = 25;
-    if (sandhi) junctionAgg = 10;
+    seasonTerm = Math.min(100, (tendency.includes(dominant) ? 70 : 0) + (sandhi ? 30 : 0));
+    temperatureTerm = temperatureAggravation(dominant, environment.temperatureC);
+    humidityTerm = humidityAggravation(dominant, environment.humidity);
   }
-  const eContribution = Math.min(100, round2(weatherAgg + seasonAgg + junctionAgg));
+  const eContribution = environment
+    ? Math.min(
+        100,
+        round2(
+          (ENV_WEIGHTS.season * seasonTerm +
+            ENV_WEIGHTS.temperature * temperatureTerm +
+            ENV_WEIGHTS.humidity * humidityTerm) /
+            100
+        )
+      )
+    : 0;
 
   // ---------- Combined ----------
   const combinedScore = round2(0.5 * qContribution + 0.3 * wContribution + 0.2 * eContribution);
@@ -179,15 +191,27 @@ export function computeCombined(
     100 * (0.5 * qPresent + 0.3 * dataCompleteness + 0.2 * eQuality)
   );
 
+  // ---------- Step-by-step arithmetic (rendered verbatim) ----------
+  const assumedCount = subScores.filter((s) => s.assumedNormal).length;
+  const healthTerms = subScores
+    .map((s) => `${s.weight}×${s.assumedNormal ? 100 : s.score}`)
+    .join(" + ");
+  const calculation: string[] = [
+    `Check-in (50%): ${dominantPct}/100 → 0.5 × ${qContribution} = ${round2(0.5 * qContribution)}`,
+    `Health data (30%): balance = (${healthTerms}) ÷ 100 = ${balanceScore} → strain = 100 − ${balanceScore} = ${wContribution} → 0.3 × ${wContribution} = ${round2(0.3 * wContribution)}`,
+    `Environment (20%): (${ENV_WEIGHTS.season}×${seasonTerm} + ${ENV_WEIGHTS.temperature}×${temperatureTerm} + ${ENV_WEIGHTS.humidity}×${humidityTerm}) ÷ 100 = ${round2((ENV_WEIGHTS.season * seasonTerm + ENV_WEIGHTS.temperature * temperatureTerm + ENV_WEIGHTS.humidity * humidityTerm) / 100)} → 0.2 × ${eContribution} = ${round2(0.2 * eContribution)}`,
+    `Combined = ${round2(0.5 * qContribution)} + ${round2(0.3 * wContribution)} + ${round2(0.2 * eContribution)} = ${combinedScore} / 100`,
+  ];
+
   // ---------- Explanation payload ----------
   const explanation: string[] = [
-    `Questionnaire (50%): dominant imbalance ${qContribution}/100.`,
-    subScores.length > 0
-      ? `Wearable (30%): balance ${balanceScore}/100 across ${subScores.length} indicator${subScores.length > 1 ? "s" : ""} → strain ${wContribution}/100.`
-      : "Wearable (30%): no device or manual readings in the last 7 days — contributes 0.",
+    `Check-in (50%): dominant imbalance ${qContribution}/100 (${dominant ?? "none"} ${dominantPct}%).`,
+    assumedCount === 0
+      ? `Health data (30%): all ${COMBINED_WEARABLE_METRICS.length} parameters measured — balance ${balanceScore}/100 → strain ${wContribution}/100.`
+      : `Health data (30%): balance ${balanceScore}/100 with ${assumedCount} parameter${assumedCount > 1 ? "s" : ""} assumed at a normal healthy level (no reading in 7 days) → strain ${wContribution}/100.`,
     environment
-      ? `Environment (20%): ${environment.temperatureC != null ? `${environment.temperatureC}°C, ` : ""}${environment.humidity != null ? `${environment.humidity}% RH, ` : ""}${SEASON_LABEL[season]} → weather ${weatherAgg} + season ${seasonAgg} + junction ${junctionAgg} = ${eContribution}/100 for your ${dominant ?? "dominant"} dosha.`
-      : "Environment (20%): no environment snapshot — contributes 0.",
+      ? `Environment (20%): season ${seasonTerm}/100 (fixed weight 40), temperature ${temperatureTerm}/100 (weight 30), humidity ${humidityTerm}/100 (weight 30) → ${eContribution}/100 for your ${dominant ?? "dominant"} dosha.`
+      : `Environment (20%): no environment snapshot — assumed neutral, contributes 0.`,
     `Combined = 0.5 × ${qContribution} + 0.3 × ${wContribution} + 0.2 × ${eContribution} = ${combinedScore}/100.`,
   ];
 
@@ -196,50 +220,61 @@ export function computeCombined(
     combinedScore,
     dominantDosha: dominant,
     questionnaire: { contribution: qContribution, dominantDosha: dominant, dominantPct },
-    wearable: { contribution: wContribution, balanceScore, subScores, dataCompleteness },
+    wearable: {
+      contribution: wContribution,
+      balanceScore,
+      subScores,
+      assumedCount,
+      dataCompleteness,
+    },
     environment: {
       contribution: eContribution,
-      weatherTerm: weatherAgg,
-      seasonTerm: seasonAgg,
-      junctionTerm: junctionAgg,
+      assumedNormal: environment == null,
+      seasonTerm,
+      temperatureTerm,
+      humidityTerm,
       temperatureC: environment?.temperatureC ?? null,
       humidity: environment?.humidity ?? null,
       season,
       seasonLabel: SEASON_LABEL[season],
       rituSandhi: sandhi,
       tendencyDoshas: tendency,
-      aggravationOfDominant: eContribution,
     },
     confidence,
+    calculation,
     explanation,
   };
 }
 
 /**
- * One-line scoring formula per wearable metric, shown under each sub-score so
+ * One-line scoring formula per health metric, shown under each sub-score so
  * the 0-100 balance scale stays readable (educational transparency).
  */
 export function wearableScoreFormula(key: MetricKey): string {
   switch (key) {
     case "sleep_duration":
       return "7-9 h → 100 · −30 per hour outside";
-    case "resting_heart_rate":
-      return "≤70 bpm → 100 · −2.5 per bpm above";
-    case "hrv_rmssd":
-      return "age average → 100 · 0 at half of it";
+    case "heart_rate":
+      return "55-85 bpm (daily avg) → 100 · −2.5 per bpm outside";
+    case "spo2":
+      return "≥95% → 100 · −10 per point below";
+    case "active_calories":
+      return "0 kcal → 0 · ≥300 kcal → 100, linear";
     case "steps":
       return "10k → 100 · 2k → 0, linear";
+    case "stress_level":
+      return "1 → 100 · 5 → 0, linear (manual 1-5)";
+    case "sleep_quality":
+      return "5 → 100 · 1 → 0, linear (manual 1-5)";
     default:
       return "display-only, not scored";
   }
 }
 
 /**
- * Piecewise normalisation of one wearable metric to a 0-100 "balance" score
- * (100 = comfortably within the documented reference band). Every mapping is
- * a documented design proposal anchored to the reference ranges in
- * reference-values.ts. SpO2 is deliberately EXCLUDED from scoring (report
- * Ch. 8.5, overestimation bias) — it is display-only.
+ * Piecewise normalisation of one health metric to a 0-100 "balance" score
+ * (100 = a normal healthy human). Every mapping is a documented design
+ * proposal anchored to the reference values in reference-values.ts.
  */
 export function normalizeWearableScore(key: MetricKey, value: number, age: number | null | undefined): number {
   let score: number;
@@ -250,21 +285,46 @@ export function normalizeWearableScore(key: MetricKey, value: number, age: numbe
       score = Math.max(5, 100 - dev * 30);
       break;
     }
-    case "resting_heart_rate": {
-      // <=70 -> 100; -2.5 points per bpm above 70, floor 0 (110 bpm -> 0).
-      score = Math.max(0, Math.min(100, 100 - Math.max(0, value - 70) * 2.5));
+    case "heart_rate": {
+      // Daily-average band 55-85 bpm -> 100; -2.5 per bpm outside, floor 0.
+      const dev = value < 55 ? 55 - value : value > 85 ? value - 85 : 0;
+      score = Math.max(0, 100 - dev * 2.5);
       break;
     }
-    case "hrv_rmssd": {
-      // Relative to age-band reference average: 100 at/above reference,
-      // linearly to 0 at half the reference.
-      const ref = hrvReferenceAverage(age);
-      score = Math.max(0, Math.min(100, ((value / ref - 0.5) / 0.5) * 100));
+    case "spo2": {
+      // >=95% -> 100; -10 per point below, floor 0.
+      score = Math.max(0, Math.min(100, 100 - Math.max(0, 95 - value) * 10));
+      break;
+    }
+    case "active_calories": {
+      // Linear 0 kcal -> 0 to >=300 kcal -> 100 (design-proposal goal band).
+      score = Math.max(0, Math.min(100, (value / 300) * 100));
       break;
     }
     case "steps": {
       // Linear 0 at 2,000 steps to 100 at 10,000 steps.
       score = Math.max(0, Math.min(100, ((value - 2000) / 8000) * 100));
+      break;
+    }
+    case "stress_level": {
+      // Manual 1-5 (5 = most stressed): 1 -> 100, 5 -> 0.
+      score = Math.max(0, Math.min(100, ((5 - value) / 4) * 100));
+      break;
+    }
+    case "sleep_quality": {
+      // Manual 1-5 (5 = best): 5 -> 100, 1 -> 0.
+      score = Math.max(0, Math.min(100, ((value - 1) / 4) * 100));
+      break;
+    }
+    case "resting_heart_rate": {
+      // Legacy mapping (metric no longer in the combined set).
+      score = Math.max(0, Math.min(100, 100 - Math.max(0, value - 70) * 2.5));
+      break;
+    }
+    case "hrv_rmssd": {
+      // Legacy mapping (metric no longer in the combined set).
+      const ref = hrvReferenceAverage(age);
+      score = Math.max(0, Math.min(100, ((value / ref - 0.5) / 0.5) * 100));
       break;
     }
     default:
@@ -273,33 +333,74 @@ export function normalizeWearableScore(key: MetricKey, value: number, age: numbe
   return round2(score);
 }
 
+function hrvReferenceAverage(age: number | null | undefined): number {
+  if (age == null) return 42;
+  if (age <= 25) return 55;
+  if (age <= 35) return 45;
+  if (age <= 45) return 38;
+  if (age <= 55) return 32;
+  if (age <= 65) return 27;
+  return 22;
+}
+
 /**
- * Environmental aggravation of one dosha using classical guna logic
- * (CT label). v2 design-proposal slopes recalibrated so that typical weather
- * registers (v1 thresholds — cold <18 °C, dry <35 % RH — scored 0 for most
- * real conditions); capped at 100.
- *   Vata: cool air (below 24 °C) + dry air (below 50 % RH) aggravate.
- *   Pitta: heat (above 26 °C) + humid heat aggravate.
- *   Kapha: cold (below 18 °C) + damp air (above 72 % RH) aggravate.
+ * Temperature-only aggravation of one dosha (classical guna logic, normalised
+ * to 0-100). Missing temperature is assumed at a neutral 22 °C room value.
+ *   Vata: cool air (below 24 °C) aggravates, 0 °C -> 100.
+ *   Pitta: heat (above 26 °C) aggravates, 50 °C -> 100.
+ *   Kapha: cold (below 18 °C) aggravates, 0 °C -> 100.
+ */
+export function temperatureAggravation(dosha: Dosha, temperatureC: number | null): number {
+  const temp = temperatureC ?? 22;
+  let agg = 0;
+  switch (dosha) {
+    case "vata":
+      agg = Math.max(0, 24 - temp) * (100 / 24);
+      break;
+    case "pitta":
+      agg = Math.max(0, temp - 26) * (100 / 24);
+      break;
+    case "kapha":
+      agg = Math.max(0, 18 - temp) * (100 / 18);
+      break;
+  }
+  return Math.min(100, round2(agg));
+}
+
+/**
+ * Humidity-only aggravation of one dosha (classical guna logic, normalised to
+ * 0-100). Missing humidity is assumed at a neutral 50 % room value.
+ *   Vata: dry air (below 50 %) aggravates, 0 % -> 100.
+ *   Pitta: humid heat (above 70 %) aggravates, 100 % -> 100.
+ *   Kapha: damp air (above 72 %) aggravates, 100 % -> 100.
+ */
+export function humidityAggravation(dosha: Dosha, humidity: number | null): number {
+  const hum = humidity ?? 50;
+  let agg = 0;
+  switch (dosha) {
+    case "vata":
+      agg = Math.max(0, 50 - hum) * 2;
+      break;
+    case "pitta":
+      agg = Math.max(0, hum - 70) * (100 / 30);
+      break;
+    case "kapha":
+      agg = Math.max(0, hum - 72) * (100 / 28);
+      break;
+  }
+  return Math.min(100, round2(agg));
+}
+
+/**
+ * Combined weather aggravation (temperature + humidity, equally split) — kept
+ * for the dashboard/educational display of raw climate load per dosha.
  */
 export function environmentalAggravation(
   dosha: Dosha,
   temperatureC: number | null,
   humidity: number | null
 ): number {
-  let agg = 0;
-  const temp = temperatureC ?? 22;
-  const hum = humidity ?? 50;
-  switch (dosha) {
-    case "vata":
-      agg = Math.max(0, 24 - temp) * 2.5 + Math.max(0, 50 - hum) * 0.8;
-      break;
-    case "pitta":
-      agg = Math.max(0, temp - 26) * 4 + Math.max(0, hum - 70) * 0.5;
-      break;
-    case "kapha":
-      agg = Math.max(0, 18 - temp) * 2 + Math.max(0, hum - 72) * 1.2;
-      break;
-  }
-  return Math.min(100, round2(agg));
+  return round2(
+    temperatureAggravation(dosha, temperatureC) * 0.5 + humidityAggravation(dosha, humidity) * 0.5
+  );
 }

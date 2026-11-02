@@ -1,2 +1,9 @@
 skills/
 node_modules/
+.next/
+dev.log
+db/
+tsconfig.tsbuildinfo
+upload/
+agent-ctx/
+tool-results/

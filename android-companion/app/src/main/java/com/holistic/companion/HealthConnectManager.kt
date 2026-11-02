@@ -4,13 +4,9 @@ import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
-import androidx.health.connect.client.records.DistanceRecord
-import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
-import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.Record
-import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
@@ -62,17 +58,15 @@ class HealthConnectManager(private val context: Context) {
     private val client: HealthConnectClient by lazy { HealthConnectClient.getOrCreate(context) }
 
     companion object {
-        /** Read permissions requested on Screen 2 — only types the platform consumes. */
+        /** Read permissions requested on Screen 2 — only the types the platform consumes:
+         *  heart rate, SpO2, steps, active calories, sleep. Health Connect has NO stress
+         *  record type, so stress/sleep-quality/mood are manual entries on the website. */
         val PERMISSIONS: Set<String> = setOf(
             HealthPermission.getReadPermission(StepsRecord::class),
             HealthPermission.getReadPermission(HeartRateRecord::class),
-            HealthPermission.getReadPermission(RestingHeartRateRecord::class),
             HealthPermission.getReadPermission(SleepSessionRecord::class),
             HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
-            HealthPermission.getReadPermission(DistanceRecord::class),
-            HealthPermission.getReadPermission(ExerciseSessionRecord::class),
             HealthPermission.getReadPermission(OxygenSaturationRecord::class),
-            HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
         )
 
         /** Map a Health Connect permission string to the platform's short key. */
@@ -149,17 +143,6 @@ class HealthConnectManager(private val context: Context) {
             )
         }
 
-        read(RestingHeartRateRecord::class, "resting_heart_rate") { r ->
-            listOf(
-                SyncRecord(
-                    "resting_heart_rate",
-                    r.beatsPerMinute.toDouble(),
-                    r.time,
-                    r.metadata.dataOrigin.packageName,
-                ),
-            )
-        }
-
         read(SleepSessionRecord::class, "sleep") { r ->
             val origin = r.metadata.dataOrigin.packageName
             val hours = Duration.between(r.startTime, r.endTime).toMillis() / 3_600_000.0
@@ -196,26 +179,6 @@ class HealthConnectManager(private val context: Context) {
             )
         }
 
-        read(DistanceRecord::class, "distance") { r ->
-            listOf(
-                SyncRecord(
-                    "distance",
-                    Math.round(r.distance.inKilometers * 100) / 100.0,
-                    r.endTime,
-                    r.metadata.dataOrigin.packageName,
-                ),
-            )
-        }
-
-        // Exercise sessions feed the platform's existing "active minutes" metric.
-        read(ExerciseSessionRecord::class, "exercise") { r ->
-            val minutes = Duration.between(r.startTime, r.endTime).toMinutes()
-            if (minutes <= 0) emptyList()
-            else listOf(
-                SyncRecord("active_minutes", minutes.toDouble(), r.endTime, r.metadata.dataOrigin.packageName),
-            )
-        }
-
         read(OxygenSaturationRecord::class, "spo2") { r ->
             val pct = r.percentage.value
             if (pct in 50.0..100.0) {
@@ -223,17 +186,6 @@ class HealthConnectManager(private val context: Context) {
             } else {
                 emptyList()
             }
-        }
-
-        read(HeartRateVariabilityRmssdRecord::class, "hrv") { r ->
-            listOf(
-                SyncRecord(
-                    "hrv_rmssd",
-                    r.heartRateVariabilityMillis,
-                    r.time,
-                    r.metadata.dataOrigin.packageName,
-                ),
-            )
         }
 
         return ReadOutcome(records, origins, denied, errors)

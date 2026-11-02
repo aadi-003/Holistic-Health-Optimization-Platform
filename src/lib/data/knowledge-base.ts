@@ -57,6 +57,8 @@ export interface RecommendationRule {
   sanskritIast: string;
   english: string;
   recommendation: string;
+  /** Short imperative actions — what to actually DO (card body, kept brief). */
+  steps: string[];
   why: string;
   conditions: RuleCondition;
   classicalSource: string | null;
@@ -81,6 +83,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Pre-dawn wake window",
     recommendation:
       "Aim for a consistent wake time in the pre-dawn window (roughly 45-60 minutes before sunrise), and keep it the same across the week.",
+    steps: ["Fix one wake time for the whole week", "Aim for the pre-dawn window when your schedule allows", "Do not shorten sleep to wake earlier"],
     why: "The classical daily regimen places waking during brahma-muhūrta at the start of the day's routine. As an educational app we translate this into a regularity rule adapted to your own schedule rather than a fixed clock time.",
     conditions: {},
     classicalSource: "A.Hr.Sū. 2/1 (via Anagha & Deole 2021, [5])",
@@ -101,6 +104,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Tooth cleaning — taste by constitution",
     recommendation:
       "Classical oral-care education: for a Vata constitution the tooth-stick tradition uses sweet and astringent tastes (e.g. madhuka, khadira). If you use chew-sticks or herbal formulations, this is the classical taste logic behind them.",
+    steps: ["Pick sweet/astringent herbal tooth care if you use chew-sticks", "Keep your regular modern dental routine"],
     why: "The dinacharya chapter maps Prakriti to taste category for oral care: Vata - sweet/astringent, with citations. This is presented as taste education, not a dental treatment.",
     conditions: { prakritiIncludes: ["vata"] },
     classicalSource: "A.Hr.Sū. 2/2-3; Cha.Sa.Sū. 5/71-73 (via Anagha & Deole 2021, [5])",
@@ -118,6 +122,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Tooth cleaning — bitter taste education",
     recommendation:
       "Classical oral-care education: for a Pitta constitution the tooth-stick tradition favours bitter tastes (e.g. nimba / neem). Presented as the classical taste logic behind herbal oral-care choices.",
+    steps: ["Pick bitter (neem) herbal tooth care if you use chew-sticks", "Keep your regular modern dental routine"],
     why: "Same classical Prakriti-to-taste table; Pitta maps to the bitter taste category.",
     conditions: { prakritiIncludes: ["pitta"] },
     classicalSource: "A.Hr.Sū. 2/2-3; Cha.Sa.Sū. 5/71-73 (via Anagha & Deole 2021, [5])",
@@ -135,6 +140,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Tooth cleaning — pungent taste; dry powder massage",
     recommendation:
       "Classical education: for a Kapha constitution the tooth-stick tradition favours pungent tastes (e.g. karanja, arka); the classical routine also describes udvartana (dry powder friction massage) as a Kapha-reducing practice.",
+    steps: ["Pick pungent-herb tooth care if you use chew-sticks", "Optional: dry powder friction massage before bathing"],
     why: "The tooth-stick table maps Kapha to the pungent taste; udvartana appears in the same dinacharya sequence for Kapha constitutions.",
     conditions: { prakritiIncludes: ["kapha"] },
     classicalSource: "Tooth table via Anagha & Deole 2021, [5]; udvartana A.Hr.Sū. 2/16 via [5]",
@@ -152,6 +158,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Tongue scraping",
     recommendation:
       "Include gentle tongue scraping in your morning oral care, as part of the classical morning sequence.",
+    steps: ["Scrape your tongue each morning before brushing"],
     why: "Listed in the dinacharya component catalogue extracted from the peer-reviewed CSNE chapter as part of the oral-hygiene stack (brushing, tongue scraping, oil pulling).",
     conditions: {},
     classicalSource: "Dinacharya catalogue via Anagha & Deole 2021, [5]",
@@ -169,6 +176,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Oil massage before bathing",
     recommendation:
       "Consider a comfortable oil massage (abhyaṅga) before bathing, especially when your current state shows Vata-dominant signs.",
+    steps: ["Warm the oil and massage before your bath", "Wipe floors to avoid slipping", "Patch-test new oils on sensitive skin"],
     why: "Abhyaṅga before bathing is part of the classical dinacharya sequence, and it is described as sleep-promoting and grounding (A.Hr.Sū. 2/8). The Vata-state emphasis follows the imbalance-correction precedence.",
     conditions: {},
     classicalSource: "A.Hr.Sū. 2/8, 2/11-14 (via Anagha & Deole 2021, [5])",
@@ -189,6 +197,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Bathing — season-appropriate water temperature",
     recommendation:
       "Keep bathing in your routine; the classical texts condition water temperature on season and body region (warm in cold seasons, cooler preference in peak heat).",
+    steps: ["Cold seasons: warm bath", "Peak heat: prefer a cooler bath"],
     why: "Snāna with region- and season-conditional water temperature is extracted in the dinacharya catalogue.",
     conditions: { seasons: ["hemanta", "shishira", "greeshma"] },
     classicalSource: "Su.Sa.Ci. 24/61 via Anagha & Deole 2021, [5]",
@@ -208,6 +217,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Eat on true hunger, previous meal digested",
     recommendation:
       "Before eating, do a quick hunger check: the classical rule is to eat when the previous meal is digested and genuine hunger is present.",
+    steps: ["Pause and check real hunger before eating", "Wait until the previous meal is digested"],
     why: "Classical eating-behaviour anchor: eat when the previous meal is digested and on genuine hunger (Su.Sa.Ut. 34/75). The app presents this as an educational prompt, never as food restriction.",
     conditions: {},
     classicalSource: "Su.Sa.Ut. 34/75 (via Anagha & Deole 2021, [5])",
@@ -228,6 +238,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Rules of eating (how to eat)",
     recommendation:
       "Classical eating-rule education: eat warm and unctuous preparations in due quantity, at a comfortable pace, with attention — the classical 'how to eat' set.",
+    steps: ["Eat warm, unctuous meals in due quantity", "Eat at a comfortable pace with attention on the meal"],
     why: "The āhāra-vidhi rules of Caraka-saṃhitā Vimāna-sthāna 1.21-25 (eat warm/unctuous in due quantity, etc.) are carried by the reviewed CSNE chapter.",
     conditions: {},
     classicalSource: "Cha.Sa.Vī. 1/21-25 (via Anagha & Deole 2021, [5])",
@@ -245,6 +256,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Two-meal regularity",
     recommendation:
       "Aim for a regular two-meal pattern with a stable timing rhythm rather than continuous grazing through the day.",
+    steps: ["Keep two fixed meal times", "Avoid grazing between meals"],
     why: "The classical anchors describe twice-daily meal frequency without grazing (report Ch. 9.3); the app frames this as meal-regularity education.",
     conditions: {},
     classicalSource: "Meal regularity anchors via Anagha & Deole 2021, [5]",
@@ -265,6 +277,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Taste education by constitution",
     recommendation:
       "Taste-pattern education: the classical logic maps constitutions to balancing tastes — Vata: sweet, sour, salty tendencies; Pitta: sweet, bitter, astringent tendencies; Kapha: pungent, bitter, astringent tendencies. Use this as background when you plan meals.",
+    steps: ["Plan meals around your balancing tastes (Vata: sweet/sour/salty · Pitta: sweet/bitter/astringent · Kapha: pungent/bitter/astringent)"],
     why: "Generalisation of the constitution-to-taste pattern demonstrated by the tooth-stick table (report Ch. 9.7). Educational content, not a diet prescription.",
     conditions: { prakritiIncludes: ALL_DOSHAS },
     classicalSource: "Taste-by-constitution pattern via Anagha & Deole 2021, [5]",
@@ -285,6 +298,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Season-conditional eating emphasis",
     recommendation:
       "In peak heat, favour lighter meals and steady hydration timing; in cold seasons, favour warm, nourishing meal regularity — a classical seasonal eating emphasis.",
+    steps: ["Peak heat: lighter meals, steady hydration timing", "Cold seasons: warm, regular, nourishing meals"],
     why: "Digestive strength (agni) varies seasonally in the classical scheme (report Ch. 9.2); meal-regularity advice is adjusted seasonally as education.",
     conditions: { seasons: ["greeshma", "hemanta", "shishira"] },
     classicalSource: "Seasonal scheme per Dhiman et al. 2026 [6, Abstract]; dinacharya anchors [5]",
@@ -304,6 +318,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Suitable — Vata-state support",
     recommendation:
       "When your current state is Vata-dominant, classical routine logic favours regularity: regular meal and sleep times, warm unctuous meals framing, and sensory-rest breaks.",
+    steps: ["Fix regular meal and sleep times", "Prefer warm, unctuous meals", "Take short sensory-rest breaks from screens"],
     why: "Grounding-routine education assembled from dinacharya regularity principles; Vata-state psychological associations from Mills et al. (2019) are used as educational context only.",
     conditions: { vikritiDominant: "vata" },
     classicalSource: "Dinacharya regularity principles via Anagha & Deole 2021, [5]",
@@ -324,6 +339,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Suitable — Pitta-state support",
     recommendation:
       "When your current state is Pitta-dominant, classical taste logic favours cooling preparations (sweet, bitter, astringent tendencies), avoiding peak-sun exertion and favouring calmer meal pacing.",
+    steps: ["Favour cooling preparations (sweet/bitter/astringent)", "Avoid exertion at peak sun", "Slow your meal pacing"],
     why: "Pitta-heat framing consistent with classical attributes (tīkṣṇa/heat) used educationally; the seasonal scheme assigns Sharad to Pitta aggravation.",
     conditions: { vikritiDominant: "pitta" },
     classicalSource: "Classical Pitta attributes via Tripathi et al. 2011 [2] and Anagha & Deole 2021 [5]",
@@ -341,6 +357,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Suitable — Kapha-state support",
     recommendation:
       "When your current state is Kapha-dominant, classical routine logic favours wake-time regularity, lighter warm preparations with pungent-bitter-astringent taste education, and consistent daily activity.",
+    steps: ["Wake at the same fixed time daily", "Choose warm, light meals (pungent-bitter-astringent)", "Keep daily activity steady"],
     why: "Kapha-state features (heaviness, hypoactivity) map to the classical opposite-quality logic (light, warm, mobile); assembled from the dinacharya catalogue.",
     conditions: { vikritiDominant: "kapha" },
     classicalSource: "Dinacharya catalogue via Anagha & Deole 2021, [5]",
@@ -358,6 +375,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "To limit — excess exercise contraindication",
     recommendation:
       "Avoid pushing exercise to exhaustion. The classical texts list excess vyāyāma as causing thirst, emaciation, breathlessness, fatigue, cough and fever — and contraindicate vigorous exercise in Vata/Pitta disturbance, childhood and old age.",
+    steps: ["Stop before exhaustion", "Keep sessions light until balance returns"],
     why: "Contraindication list A.Hr.Sū. 2/14; the rule fires as a caution whenever vikriti shows Vata or Pitta imbalance, so the contraindication precedes maintenance advice.",
     conditions: { vikritiDominant: "vata" },
     classicalSource: "A.Hr.Sū. 2/14 (via Anagha & Deole 2021, [5])",
@@ -375,6 +393,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "To limit — heavy/oily patterns in Kapha state",
     recommendation:
       "When your current state is Kapha-dominant, classical quality-logic suggests moderating heavy, oily, fried and very sweet preparations and daytime napping — framed as education, not prohibition.",
+    steps: ["Moderate heavy, oily, fried and very sweet foods", "Avoid daytime napping"],
     why: "Opposite-quality (guṇa) logic applied to Kapha heaviness/oiliness; educational framing from the dinacharya catalogue.",
     conditions: { vikritiDominant: "kapha" },
     classicalSource: "Guṇa logic via Anagha & Deole 2021, [5]",
@@ -394,6 +413,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Exercise at half your strength",
     recommendation:
       "Exercise regularly but within the classical dose: up to about half your capacity — the traditional check is stopping when effort feels like half of your maximum, e.g. sweat on the forehead/nose without exhaustion. Use steps and active minutes as your objective dose.",
+    steps: ["Exercise to about half your capacity", "Stop at light sweat, before exhaustion", "Track steps/active minutes as your dose"],
     why: "Classical dose rule: exercise lightens the body, strengthens digestion and reduces obesity, capped at half of one's strength (A.Hr.Sū. 2/11-14). Wearable steps/active minutes are the objective measures with acceptable accuracy.",
     conditions: {},
     classicalSource: "A.Hr.Sū. 2/11-14 (via Anagha & Deole 2021, [5])",
@@ -414,6 +434,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Season-conditional exercise intensity",
     recommendation:
       "Classically, exercise capacity is described as higher in cool seasons (especially for those on nourishing diets) and lower in peak heat — adjust outdoor activity timing and intensity with the season.",
+    steps: ["Cool seasons: intensity can go up a notch", "Peak heat: move activity to cooler hours"],
     why: "Season-and-diet conditioning of exercise from the classical exercise chapter (report Ch. 9.4); aligned with practical heat-avoidance.",
     conditions: { seasons: ["hemanta", "shishira", "vasanta", "greeshma"] },
     classicalSource: "A.Hr.Sū. 2/11-14 via Anagha & Deole 2021, [5]",
@@ -431,6 +452,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Recovery first — do not increase intensity now",
     recommendation:
       "Hold off increasing exercise intensity right now. Your recent data shows recovery strain (short sleep, elevated resting heart rate, low HRV, or a Vata/Pitta imbalance state). Prioritise sleep regularity and lighter movement; a comfortable post-exercise massage is the classical recovery framing.",
+    steps: ["Hold intensity increases this week", "Protect your sleep regularity", "Keep movement light; optional gentle massage"],
     why: "The classical contraindication of excess exercise in Vata/Pitta states (A.Hr.Sū. 2/14) is combined with wearable context (sleep duration, RHR trend, HRV as stress-recovery index). Wearable thresholds are platform design proposals requiring calibration.",
     conditions: { wearable: ["sleep_debt"] },
     classicalSource: "A.Hr.Sū. 2/14 (via Anagha & Deole 2021, [5])",
@@ -451,6 +473,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Recovery first — strain indicators present",
     recommendation:
       "Your 7-day resting heart rate trend is above your usual level or HRV nights are repeatedly low — treat this as a 'body under load' context card: reduce optional intensity, protect sleep regularity, and recover first.",
+    steps: ["Reduce optional intensity", "Protect sleep regularity", "Recover first, then resume"],
     why: "Recovery-first framing from the worked example rules (report Ch. 14.3 R11): RHR trend above baseline or repeated low-HRV nights suppress intensity-increase advice.",
     conditions: { wearable: ["rhr_elevated"] },
     classicalSource: null,
@@ -473,6 +496,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Regular sleep timing",
     recommendation:
       "Keep a regular bed and wake time. Classical texts prescribe sleep in proper quantity and at proper time, with needs varying by person; modern sleep research also treats regularity as a measurable, useful property.",
+    steps: ["Fix your bed and wake times", "Keep them daily, weekends included"],
     why: "Nidrā anchor: proper sleep supports happiness, nourishment, strength and knowledge (Cha.Sa.Sū. 21/30 via [5]); regularity is measurable from wearable sleep sessions.",
     conditions: {},
     classicalSource: "Cha.Sa.Sū. 21/30 (via Anagha & Deole 2021, [5])",
@@ -493,6 +517,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Evening wind-down stack",
     recommendation:
       "Build a simple evening routine: a comfortable (not too late) bath, optional light oil massage, dim screens and a consistent wind-down before your regular bedtime.",
+    steps: ["Take a warm evening bath", "Dim screens before bed", "Keep the same wind-down order nightly"],
     why: "Bath before sleep and regular timing appear in the dinacharya sequence; abhyaṅga is described as sleep-promoting (A.Hr.Sū. 2/8).",
     conditions: {},
     classicalSource: "A.Hr.Sū. 2/8; dinacharya sequence via Anagha & Deole 2021, [5]",
@@ -510,6 +535,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Vata-state bedtime regularity",
     recommendation:
       "With a Vata-dominant current state, protect an earlier, highly regular bedtime and a warm, calm wind-down — classical grounding logic paired with the sleep-regularity principle.",
+    steps: ["Move bedtime earlier, same time nightly", "Keep the wind-down warm and calm"],
     why: "Worked example R5: Vikriti Vata imbalance or short sleep -> suppress intensity advice, offer abhyaṅga-before-bath education and earlier-bedtime regularity prompt.",
     conditions: { vikritiDominant: "vata" },
     classicalSource: "A.Hr.Sū. 2/8 via Anagha & Deole 2021, [5]",
@@ -529,6 +555,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Seasonal junction — transition gently",
     recommendation:
       "You are in a seasonal junction window (ṛtu-sandhi). Classical seasonal logic tapers the previous regimen and introduces the next gradually; keep meal and sleep times especially regular through the change.",
+    steps: ["Taper the old season's regimen", "Add new-season habits gradually", "Keep meal/sleep times extra regular"],
     why: "Ṛtu-sandhi transition vulnerability from the ritucharya scheme (Dhiman et al. 2026 [6, Abstract]); junction window length is a design proposal.",
     conditions: { rituSandhi: true },
     classicalSource: "Ṛtu-sandhi concept per Dhiman et al. 2026 [6, Abstract]",
@@ -549,6 +576,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Cold-season routine",
     recommendation:
       "In the cold half of the year, the classical scheme emphasises nourishing regular meals, warm bathing below the neck, and season-appropriate exercise; digestive strength is described as strong.",
+    steps: ["Keep regular nourishing warm meals", "Warm bath over the whole body", "Keep season-appropriate exercise"],
     why: "Seasonal routine emphasis from the worked example R7; bath temperature rules Su.Sa.Ci. 24/61 via [5].",
     conditions: { seasons: ["hemanta", "shishira"] },
     classicalSource: "Su.Sa.Ci. 24/61 via Anagha & Deole 2021, [5]; seasonal scheme [6]",
@@ -566,6 +594,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Peak-heat routine",
     recommendation:
       "In peak heat: avoid exertion at peak sun, favour cooler bathing emphasis and lighter evening meals — classical seasonal practice, with extra relevance if your constitution is Pitta-dominant.",
+    steps: ["Avoid exertion at peak sun", "Prefer cooler baths", "Keep evening meals light"],
     why: "Worked example R8: season = peak heat AND Prakriti Pitta-dominant -> cooling-routine education.",
     conditions: { seasons: ["greeshma"] },
     classicalSource: "Seasonal scheme [6]; Pitta-heat attributes [2, 5]",
@@ -583,6 +612,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Spring routine",
     recommendation:
       "In spring, the classical scheme describes liquefied Kapha: favour lighter preparations, steady activity and earlier wake times as the seasonal emphasis.",
+    steps: ["Choose lighter preparations", "Keep activity steady daily", "Wake a little earlier"],
     why: "Vasanta is classically the Kapha-aggravation season (report Ch. 9.2); routine emphasis follows opposite-quality logic.",
     conditions: { seasons: ["vasanta"] },
     classicalSource: "Seasonal scheme per Dhiman et al. 2026 [6, Abstract]",
@@ -602,6 +632,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Code of right conduct — measured speech and sensory rest",
     recommendation:
       "Practice small conduct anchors from the classical code of right conduct: measured speech, periodic sensory-rest breaks from screens, and respectful social interaction through the workday.",
+    steps: ["Pause before reacting — measured speech", "Take short screen-free breaks through the day"],
     why: "The code of right conduct (sadvṛtta) is prescribed for social and professional life and described as preventing exogenous disease (Cha.Sa.Sū. 8/25 via [5]); linked educationally to modern stress constructs.",
     conditions: {},
     classicalSource: "Cha.Sa.Sū. 8/25 (via Anagha & Deole 2021, [5])",
@@ -619,6 +650,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "Weekly reflective check-in",
     recommendation:
       "Once a week, review your routine adherence (wake/sleep/meal regularity) and jot a short reflective note about the week — a modern reflective-practice habit the platform pairs with classical regularity.",
+    steps: ["Once a week, review wake/sleep/meal regularity", "Jot a two-line reflection note"],
     why: "Weekly check-ins on routine adherence and reflective journaling are the report's app-rule proposal for the conduct domain (framed via the reflection construct of modern instruments, not as classical prescriptions).",
     conditions: {},
     classicalSource: null,
@@ -636,6 +668,7 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
     english: "State-aware stress education",
     recommendation:
       "Educational note: research on the vikriti questionnaire reports associations between dosha imbalance states and psychological states (Vata with anxiety and rumination; Pitta with poorer mood and stress; Kapha with stress). These are associations, not diagnoses — if stress feels heavy, ordinary routine stabilisers (regular meals, sleep, movement, social contact) are a sensible first step.",
+    steps: ["Log your stress level in Manual health data", "Lean on routine: regular meals, sleep, movement", "Seek professional care if distress escalates"],
     why: "The Vikriti study's psychological correlations are used strictly as educational context per the report's copy rules (Ch. 13): associations phrased as research findings, no diagnosis language.",
     conditions: { vikritiDominant: ALL_DOSHAS[0] },
     classicalSource: null,
@@ -653,15 +686,15 @@ export const KNOWLEDGE_BASE: RecommendationRule[] = [
  * Historical / ecosystem records kept for the references screen.
  * These are the sources the platform actually relies on.
  */
-export const PLATFORM_REFERENCES: { id: string; citation: string; url: string }[] = [
-  { id: "1", citation: "Gupta A, Singh V, Chandra S, Garg R. Towards standardization of Prakriti Evaluation: A scoping review of modern assessment tools and their psychometric properties in Ayurvedic medicine. J Ayurveda Integr Med. 2025;16(4):101157.", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC12269270/" },
-  { id: "2", citation: "Tripathi PK, Patwardhan K, Singh G. The Basic Cardiovascular Responses to Postural Changes, Exercise, and Cold Pressor Test: Do They Vary in Accordance with the Dual Constitutional Types of Ayurveda? Evid Based Complement Alternat Med. 2011;2011:251850.", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC2952295/" },
-  { id: "3", citation: "Bhalerao S, Patwardhan K. Good reporting practices for Ayurveda-based research studies. (Read via PubMed Central PMC4910291.)", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC4910291/" },
-  { id: "4", citation: "Mills PJ, et al. The Self-Assessment Vikriti questionnaire and psychological states. (Read via PubMed Central PMC6822152.)", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC6822152/" },
-  { id: "5", citation: "Anagha S, Deole YS. Dinacharya: the daily regimen. Charak Samhita New Edition book chapter, Charak Samhita Research, Training and Skill Development Centre, 2021.", url: "https://www.carakasamhitaonline.com/" },
-  { id: "6", citation: "Dhiman K, et al. Ritucharya critical narrative review, 2026. (Publisher-verified abstract only; full text inaccessible.)", url: "https://journalajmah.com/" },
-  { id: "12", citation: "Shaffer F, Ginsberg JP. An Overview of Heart Rate Variability Metrics and Norms. Front Public Health. 2017;5:258.", url: "https://www.frontiersin.org/articles/10.3389/fpubh.2017.00258/full" },
-  { id: "14", citation: "Sleep-wake detection validation of consumer wearables (report Ch. 8.1, [14]).", url: "https://pubmed.ncbi.nlm.nih.gov/" },
-  { id: "19", citation: "Fuller D, et al. Reliability and validity of commercially available wearable devices for measuring steps, energy expenditure, and heart rate: systematic review. JMIR Mhealth Uhealth. 2020;8(9):e18694.", url: "https://www.jmir.org/2020/9/e18694/" },
-  { id: "21", citation: "Seasonally expressed human transcripts with hemisphere-inverted patterns (report Ch. 9.2, [21]).", url: "https://pubmed.ncbi.nlm.nih.gov/" },
+export const PLATFORM_REFERENCES: { id: string; citation: string; url: string; usedFor: string }[] = [
+  { id: "1", usedFor: "Used for: how Prakriti assessment tools are standardised — basis for our questionnaire design.", citation: "Gupta A, Singh V, Chandra S, Garg R. Towards standardization of Prakriti Evaluation: A scoping review of modern assessment tools and their psychometric properties in Ayurvedic medicine. J Ayurveda Integr Med. 2025;16(4):101157.", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC12269270/" },
+  { id: "2", usedFor: "Used for: constitution-linked cardiovascular responses — context for Pitta/Vata traits in results.", citation: "Tripathi PK, Patwardhan K, Singh G. The Basic Cardiovascular Responses to Postural Changes, Exercise, and Cold Pressor Test: Do They Vary in Accordance with the Dual Constitutional Types of Ayurveda? Evid Based Complement Alternat Med. 2011;2011:251850.", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC2952295/" },
+  { id: "3", usedFor: "Used for: transparent-reporting standards the knowledge base and result screens follow.", citation: "Bhalerao S, Patwardhan K. Good reporting practices for Ayurveda-based research studies. (Read via PubMed Central PMC4910291.)", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC4910291/" },
+  { id: "4", usedFor: "Used for: vikriti↔mood/stress associations quoted in recommendations.", citation: "Mills PJ, et al. The Self-Assessment Vikriti questionnaire and psychological states. (Read via PubMed Central PMC6822152.)", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC6822152/" },
+  { id: "5", usedFor: "Used for: daily-routine (dinacharya) rules — wake time, oral care, oil massage, exercise, conduct.", citation: "Anagha S, Deole YS. Dinacharya: the daily regimen. Charak Samhita New Edition book chapter, Charak Samhita Research, Training and Skill Development Centre, 2021.", url: "https://www.carakasamhitaonline.com/" },
+  { id: "6", usedFor: "Used for: seasonal (ritucharya) rules and the season term of the environment score.", citation: "Dhiman K, et al. Ritucharya critical narrative review, 2026. (Publisher-verified abstract only; full text inaccessible.)", url: "https://journalajmah.com/" },
+  { id: "12", usedFor: "Used for: HRV reference values by age band (legacy display metric).", citation: "Shaffer F, Ginsberg JP. An Overview of Heart Rate Variability Metrics and Norms. Front Public Health. 2017;5:258.", url: "https://www.frontiersin.org/articles/10.3389/fpubh.2017.00258/full" },
+  { id: "14", usedFor: "Used for: why sleep duration from wearables is trusted (validation evidence).", citation: "Sleep-wake detection validation of consumer wearables (report Ch. 8.1, [14]).", url: "https://pubmed.ncbi.nlm.nih.gov/" },
+  { id: "19", usedFor: "Used for: steps/heart-rate/calorie accuracy context behind the health-data score.", citation: "Fuller D, et al. Reliability and validity of commercially available wearable devices for measuring steps, energy expenditure, and heart rate: systematic review. JMIR Mhealth Uhealth. 2020;8(9):e18694.", url: "https://www.jmir.org/2020/9/e18694/" },
+  { id: "21", usedFor: "Used for: seasonal-biology background supporting the ritucharya emphasis.", citation: "Seasonally expressed human transcripts with hemisphere-inverted patterns (report Ch. 9.2, [21]).", url: "https://pubmed.ncbi.nlm.nih.gov/" },
 ];

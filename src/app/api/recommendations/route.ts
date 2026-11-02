@@ -55,6 +55,8 @@ export async function GET() {
       sanskritIast: s.rule.sanskritIast,
       english: s.rule.english,
       recommendation: s.rule.recommendation,
+      steps: s.rule.steps,
+      doshaFocus: (s.rule.conditions.vikritiDominant ?? null) as string | null,
       why: s.rule.why,
       because: s.because,
       classicalSource: s.rule.classicalSource,

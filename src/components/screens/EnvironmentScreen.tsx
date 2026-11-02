@@ -36,7 +36,7 @@ export default function EnvironmentScreen() {
   const [geoBusy, setGeoBusy] = useState(false);
 
   async function load() {
-    const d = await api<{ snapshots: Snapshot[] }>("/api/history");
+    const d = await api<{ envSnapshots: Snapshot[] }>("/api/history");
     setLatest(d.envSnapshots[0] ?? null);
   }
 
@@ -52,7 +52,7 @@ export default function EnvironmentScreen() {
         navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
       );
       const { snapshot } = await api<{ snapshot: Snapshot }>(
-        `/api/environment?lat=${position.coords.latitude}&lon=${position.longitude}&label=My location`
+        `/api/environment?lat=${position.coords.latitude}&lon=${position.coords.longitude}&label=My location`
       );
       setLatest(snapshot);
       toast({ title: "Weather updated", description: "Source: browser location." });

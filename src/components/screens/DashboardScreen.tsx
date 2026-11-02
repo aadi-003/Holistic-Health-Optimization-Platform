@@ -100,7 +100,7 @@ export default function DashboardScreen() {
                 {latest ? fmtMetric(m.key, latest.value, latest.unit) : <span className="text-muted-foreground">No data</span>}
               </div>
               <div className="mt-1">
-                {latest ? <ProvenanceBadge provenance={latest.provenance} /> : <span className="text-xs text-muted-foreground">Connect Google Fit or enter data manually</span>}
+                {latest ? <ProvenanceBadge provenance={latest.provenance} /> : <span className="text-xs text-muted-foreground">Connect the companion app or enter data manually</span>}
               </div>
               {trend.length > 1 && (
                 <div className="mt-3 h-12">
@@ -212,7 +212,7 @@ export default function DashboardScreen() {
             <div>
               <h2 className="font-semibold tracking-tight">Combined current-state score</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                50% check-in + 30% health data + 20% environment. Components without data count as 0.
+                50% check-in + 30% health data (fixed weights) + 20% environment. Parameters without data are assumed at a normal healthy level.
               </p>
             </div>
             <div className="text-right">
@@ -242,7 +242,7 @@ export default function DashboardScreen() {
                 <span>·</span>
                 <span>
                   Wearable completeness: {Math.round(data.combined.wearable.dataCompleteness * 100)}%
-                  {data.combined.wearable.dataCompleteness === 0 && " — connect Google Fit or enter readings"}
+                  {data.combined.wearable.dataCompleteness === 0 && " — connect the companion app or enter readings"}
                 </span>
                 <span>·</span>
                 <span>Season: {data.combined.environment.seasonLabel}{data.combined.environment.rituSandhi ? " (junction)" : ""}</span>

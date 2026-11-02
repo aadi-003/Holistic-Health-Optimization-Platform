@@ -1,19 +1,17 @@
 /**
  * Extended metric catalog for the Android companion (Health Connect) sync.
  *
- * The core seven metrics are the platform catalogue in
- * `engine/reference-values.ts` (shared with manual entry and the combined
- * vikriti model — do not change them here). The companion adds Health-Connect
- * data types the platform previously had no keys for: active calories,
- * distance and sleep stages. These are display/context metrics only — they are
- * NOT added to COMBINED_WEARABLE_METRICS, so the combined model is unchanged.
+ * The core metrics are the platform catalogue in `engine/reference-values.ts`
+ * (shared with manual entry and the combined vikriti model). The companion
+ * adds Health-Connect data types the core catalogue has no keys for: distance
+ * and sleep stages. Stress, sleep quality and mood are NOT Health Connect
+ * record types — they are manual-entry-only metrics.
  */
 
 import { METRICS, type MetricKey, type MetricMeta } from "./engine/reference-values";
 
 export type CompanionMetricKey =
   | MetricKey
-  | "active_calories"
   | "distance"
   | "sleep_stage_light"
   | "sleep_stage_deep"
@@ -24,17 +22,6 @@ export type CompanionMetricKey =
 type CompanionMetricMeta = Omit<MetricMeta, "key"> & { key: CompanionMetricKey };
 
 const COMPANION_ONLY: Record<Exclude<CompanionMetricKey, MetricKey>, CompanionMetricMeta> = {
-  active_calories: {
-    key: "active_calories",
-    label: "Active calories",
-    unit: "kcal",
-    referenceAverage: null,
-    referenceSource: "Vendor estimate; no platform reference average is used.",
-    normalRange: null,
-    normalRangeSource: "Highly individual (body size, activity) — trend display only.",
-    evidenceStatus: "Energy expenditure is the least accurate wearable estimate (Fuller et al. 2020, [19]); display only.",
-    purpose: "Active energy burned — display only, not scored.",
-  },
   distance: {
     key: "distance",
     label: "Distance",
@@ -127,6 +114,9 @@ export const METRIC_DAILY_AGG: Record<CompanionMetricKey, "sum" | "avg"> = {
   hrv_rmssd: "avg",
   spo2: "avg",
   sleep_duration: "sum",
+  sleep_quality: "avg",
+  stress_level: "avg",
+  mood: "avg",
   steps: "sum",
   active_minutes: "sum",
   active_calories: "sum",

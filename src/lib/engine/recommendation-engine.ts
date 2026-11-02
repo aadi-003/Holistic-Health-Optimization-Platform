@@ -36,6 +36,9 @@ export type RuleOutcome =
   | { status: "shown"; rule: RecommendationRule; because: string[] }
   | { status: "withheld"; rule: RecommendationRule; reason: string };
 
+export type ShownOutcome = Extract<RuleOutcome, { status: "shown" }>;
+export type WithheldOutcome = Extract<RuleOutcome, { status: "withheld" }>;
+
 function mean(values: number[]): number {
   return values.reduce((s, v) => s + v, 0) / values.length;
 }
@@ -83,7 +86,7 @@ function vikritiDominantDoshas(vikriti: VikritiScore): Dosha[] {
  * Returns shown rules (sorted by precedence, then rule id) and the withheld
  * log with reasons (transparency feature, shown in a "not shown now" panel).
  */
-export function evaluateRules(ctx: RuleContext): { shown: RuleOutcome[]; withheld: RuleOutcome[] } {
+export function evaluateRules(ctx: RuleContext): { shown: ShownOutcome[]; withheld: WithheldOutcome[] } {
   const flags = computeWearableFlags(ctx.readings, ctx.age);
   const prakritiDoshas: Dosha[] | null = ctx.prakriti ? constitutionDoshas(ctx.prakriti.classification) : null;
   const vikritiDoshas: Dosha[] | null = ctx.vikriti ? vikritiDominantDoshas(ctx.vikriti) : null;
@@ -91,8 +94,8 @@ export function evaluateRules(ctx: RuleContext): { shown: RuleOutcome[]; withhel
     ? Math.max(ctx.vikriti.vataPct, ctx.vikriti.pittaPct, ctx.vikriti.kaphaPct)
     : null;
 
-  const shown: RuleOutcome[] = [];
-  const withheld: RuleOutcome[] = [];
+  const shown: ShownOutcome[] = [];
+  const withheld: WithheldOutcome[] = [];
 
   for (const rule of KNOWLEDGE_BASE) {
     const c = rule.conditions;
@@ -213,7 +216,7 @@ export function evaluateRules(ctx: RuleContext): { shown: RuleOutcome[]; withhel
   const safetyFired = shown.some((s) => s.rule.precedence === 1);
   if (safetyFired) {
     for (const s of shown) {
-      if (s.rule.precedence > 1) {
+      if (s.status === "shown" && s.rule.precedence > 1) {
         s.because.push(
           `shown after a higher-precedence recovery rule outweighed routine advice under fixed precedence (safety > contraindication > vikriti-correction > prakriti-maintenance > education)`
         );

@@ -72,7 +72,9 @@ export async function POST() {
   if (!guard.user) return guard.response;
 
   const ctx = await buildContext(guard.user.id);
-  if ("error" in ctx) return errorJson(ctx.error, 409);
+  if ("error" in ctx) {
+    return errorJson(ctx.error ?? "You need a completed Vikriti self-assessment first.", 409);
+  }
 
   const result = computeCombined(
     ctx.vikritiScore,

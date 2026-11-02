@@ -4,11 +4,13 @@ import { scoreVikriti, vikritiDominantDosha, type VikritiAnswers } from "@/lib/e
 import {
   normalizeWearableScore,
   environmentalAggravation,
+  temperatureAggravation,
+  humidityAggravation,
   computeCombined,
   type ReadingInput,
 } from "@/lib/engine/combined-engine";
 import { computeSeason, seasonDoshaTendency, isRituSandhi } from "@/lib/engine/seasonal";
-import { METRICS, COMBINED_WEARABLE_METRICS } from "@/lib/engine/reference-values";
+import { METRICS, COMBINED_WEARABLE_METRICS, HEALTH_WEIGHTS } from "@/lib/engine/reference-values";
 
 function allYes(): VikritiAnswers {
   const a: VikritiAnswers = {};
@@ -66,7 +68,7 @@ describe("Vikriti experimental scoring", () => {
   });
 });
 
-describe("Wearable normalisation (documented design-proposal mappings)", () => {
+describe("Health normalisation (documented design-proposal mappings)", () => {
   it("sleep duration: 100 inside 7-9h, decays 30/h outside", () => {
     expect(normalizeWearableScore("sleep_duration", 8, null)).toBe(100);
     expect(normalizeWearableScore("sleep_duration", 6, null)).toBe(70);
@@ -75,17 +77,36 @@ describe("Wearable normalisation (documented design-proposal mappings)", () => {
     expect(normalizeWearableScore("sleep_duration", 12, null)).toBeLessThanOrEqual(10);
   });
 
-  it("resting HR: 100 at <=70, -2.5/bpm above, floor 0 at 110", () => {
-    expect(normalizeWearableScore("resting_heart_rate", 70, null)).toBe(100);
-    expect(normalizeWearableScore("resting_heart_rate", 90, null)).toBe(50);
-    expect(normalizeWearableScore("resting_heart_rate", 110, null)).toBe(0);
-    expect(normalizeWearableScore("resting_heart_rate", 55, null)).toBe(100);
+  it("heart rate: 100 inside 55-85 band, -2.5/bpm outside", () => {
+    expect(normalizeWearableScore("heart_rate", 70, null)).toBe(100);
+    expect(normalizeWearableScore("heart_rate", 90, null)).toBe(87.5);
+    expect(normalizeWearableScore("heart_rate", 125, null)).toBe(0);
+    expect(normalizeWearableScore("heart_rate", 55, null)).toBe(100);
   });
 
-  it("HRV: 100 at age-band reference, 0 at half of it", () => {
-    expect(normalizeWearableScore("hrv_rmssd", 55, 25)).toBe(100); // age <= 25 -> ref 55
-    expect(normalizeWearableScore("hrv_rmssd", 27.5, 25)).toBe(0);
-    expect(normalizeWearableScore("hrv_rmssd", 41.25, 25)).toBe(50);
+  it("SpO2: 100 at >=95%, -10 per point below, floor 0", () => {
+    expect(normalizeWearableScore("spo2", 97, null)).toBe(100);
+    expect(normalizeWearableScore("spo2", 92, null)).toBe(70);
+    expect(normalizeWearableScore("spo2", 85, null)).toBe(0);
+  });
+
+  it("active calories: linear 0 kcal -> 0, >=300 kcal -> 100", () => {
+    expect(normalizeWearableScore("active_calories", 0, null)).toBe(0);
+    expect(normalizeWearableScore("active_calories", 150, null)).toBe(50);
+    expect(normalizeWearableScore("active_calories", 400, null)).toBe(100);
+  });
+
+  it("manual 1-5 scales: stress inverted, sleep quality direct", () => {
+    expect(normalizeWearableScore("stress_level", 1, null)).toBe(100);
+    expect(normalizeWearableScore("stress_level", 5, null)).toBe(0);
+    expect(normalizeWearableScore("stress_level", 3, null)).toBe(50);
+    expect(normalizeWearableScore("sleep_quality", 5, null)).toBe(100);
+    expect(normalizeWearableScore("sleep_quality", 1, null)).toBe(0);
+  });
+
+  it("legacy mappings still work (resting HR, HRV) though no longer scored", () => {
+    expect(normalizeWearableScore("resting_heart_rate", 90, null)).toBe(50);
+    expect(normalizeWearableScore("hrv_rmssd", 55, 25)).toBe(100);
   });
 
   it("steps: linear 0 at 2k -> 100 at 10k", () => {
@@ -95,20 +116,25 @@ describe("Wearable normalisation (documented design-proposal mappings)", () => {
   });
 });
 
-describe("Environmental aggravation (classical guna logic, v2 slopes)", () => {
-  it("vata: cool + dry aggravate", () => {
-    expect(environmentalAggravation("vata", 8, 20)).toBe(64); // 16*2.5 + 30*0.8
+describe("Environmental aggravation (classical guna logic, v3 normalised split)", () => {
+  it("temperature term: vata cool, pitta hot, kapha cold", () => {
+    expect(temperatureAggravation("vata", 8)).toBe(66.67); // 16 x 100/24
+    expect(temperatureAggravation("vata", 30)).toBe(0);
+    expect(temperatureAggravation("pitta", 32)).toBe(25); // 6 x 100/24
+    expect(temperatureAggravation("kapha", 10)).toBe(44.44); // 8 x 100/18
+  });
+
+  it("humidity term: vata dry, pitta humid-heat, kapha damp", () => {
+    expect(humidityAggravation("vata", 20)).toBe(60); // 30 x 2
+    expect(humidityAggravation("pitta", 100)).toBe(100); // 30 x 100/30
+    expect(humidityAggravation("kapha", 95)).toBe(82.14); // 23 x 100/28
+    expect(humidityAggravation("kapha", 50)).toBe(0);
+  });
+
+  it("combined aggravation is the equal-weight average of both terms", () => {
     expect(environmentalAggravation("vata", 30, 70)).toBe(0);
-  });
-  it("vata: typical cool humid weather now registers (real regression case)", () => {
-    expect(environmentalAggravation("vata", 19, 89)).toBe(12.5); // 5*2.5 + 0
-  });
-  it("pitta: heat aggravates", () => {
-    expect(environmentalAggravation("pitta", 32, 60)).toBe(24); // 6*4
+    expect(environmentalAggravation("vata", 19, 89)).toBe(10.42); // (20.83 + 0) / 2
     expect(environmentalAggravation("pitta", 10, 20)).toBe(0);
-  });
-  it("kapha: cold + damp aggravate", () => {
-    expect(environmentalAggravation("kapha", 10, 95)).toBe(43.6); // 8*2 + 23*1.2
   });
 });
 
@@ -153,39 +179,56 @@ describe("Combined 50/30/20 model", () => {
     expect(result.combinedScore).toBeCloseTo(Math.round(expected * 100) / 100, 2);
   });
 
-  it("imputes nothing: missing wearable indicators are excluded, never estimated", () => {
+  it("missing parameters are assumed at a normal healthy level (score 100, no strain)", () => {
     const result = computeCombined(vikritiVata, [], null, 28);
-    expect(result.wearable.subScores).toHaveLength(0);
-    expect(result.wearable.dataCompleteness).toBe(0);
+    expect(result.wearable.subScores).toHaveLength(7);
+    expect(result.wearable.subScores.every((s) => s.assumedNormal && s.score === 100)).toBe(true);
+    expect(result.wearable.balanceScore).toBe(100);
     expect(result.wearable.contribution).toBe(0);
+    expect(result.wearable.assumedCount).toBe(7);
+    expect(result.wearable.dataCompleteness).toBe(0);
     expect(result.confidence).toBe(50); // 0.5*1 + 0.3*0 + 0.2*0
   });
 
-  it("uses real readings when present and raises data completeness", () => {
+  it("health weights are fixed and sum to 100", () => {
+    const total = Object.values(HEALTH_WEIGHTS).reduce((s, w) => s + w, 0);
+    expect(total).toBe(100);
+    expect(COMBINED_WEARABLE_METRICS).toHaveLength(7);
+    expect(COMBINED_WEARABLE_METRICS).toContain("spo2");
+  });
+
+  it("scores every fixed-weight parameter when readings exist", () => {
     const now = new Date();
     const readings: ReadingInput[] = [
       { metric: "sleep_duration", value: 8, provenance: "manual", recordedAt: now.toISOString() },
-      { metric: "resting_heart_rate", value: 66, provenance: "measured", recordedAt: now.toISOString() },
-      { metric: "hrv_rmssd", value: 60, provenance: "measured", recordedAt: now.toISOString() },
+      { metric: "heart_rate", value: 70, provenance: "measured", recordedAt: now.toISOString() },
+      { metric: "spo2", value: 97, provenance: "measured", recordedAt: now.toISOString() },
+      { metric: "active_calories", value: 300, provenance: "measured", recordedAt: now.toISOString() },
       { metric: "steps", value: 10000, provenance: "measured", recordedAt: now.toISOString() },
+      { metric: "stress_level", value: 1, provenance: "manual", recordedAt: now.toISOString() },
+      { metric: "sleep_quality", value: 5, provenance: "manual", recordedAt: now.toISOString() },
     ];
     const result = computeCombined(vikritiVata, readings, null, 28);
+    expect(result.wearable.assumedCount).toBe(0);
     expect(result.wearable.dataCompleteness).toBe(1);
     expect(result.wearable.balanceScore).toBe(100);
     expect(result.wearable.contribution).toBe(0);
     expect(result.confidence).toBe(80); // 0.5 + 0.3 + 0.2*0 (no environment snapshot)
   });
 
-  it("adds the classical seasonal tendency (+25) when the season matches the dominant dosha", () => {
+  it("environment: fixed weights 40/30/30 over season/temperature/humidity", () => {
     const monsoon = new Date("2026-08-15"); // varsha -> vata tendency, not a junction
     const withEnv = computeCombined(vikritiVata, [], { temperatureC: 30, humidity: 60, season: "varsha", source: "manual" }, 28, monsoon);
-    expect(withEnv.environment.contribution).toBe(25); // weather 0 + season 25
+    expect(withEnv.environment.seasonTerm).toBe(70);
+    expect(withEnv.environment.temperatureTerm).toBe(0);
+    expect(withEnv.environment.humidityTerm).toBe(0);
+    expect(withEnv.environment.contribution).toBe(28); // 0.4 x 70
     const withoutMatch = computeCombined(vikritiVata, [], { temperatureC: 30, humidity: 60, season: "sharad", source: "manual" }, 28, monsoon);
     expect(withoutMatch.environment.contribution).toBe(0); // sharad -> pitta tendency, dominant vata
   });
 
-  it("recorded environment always contributes: weather + junction terms (real regression case)", () => {
-    // 2026-10-30: sharad (pitta tendency, no season term), ritu-sandhi junction.
+  it("recorded environment always contributes: season + temperature terms (real regression case)", () => {
+    // 2026-10-30: sharad (pitta tendency, no season match for vata), ritu-sandhi junction.
     const oct30 = new Date("2026-10-30");
     const result = computeCombined(
       vikritiVata,
@@ -194,31 +237,37 @@ describe("Combined 50/30/20 model", () => {
       28,
       oct30
     );
-    expect(result.environment.weatherTerm).toBe(12.5);
-    expect(result.environment.seasonTerm).toBe(0);
-    expect(result.environment.junctionTerm).toBe(10);
-    expect(result.environment.contribution).toBe(22.5);
+    expect(result.environment.seasonTerm).toBe(30); // junction bonus only
+    expect(result.environment.temperatureTerm).toBe(20.83); // 5 x 100/24
+    expect(result.environment.humidityTerm).toBe(0); // vata aggravated by DRY air, 89% is damp
+    expect(result.environment.contribution).toBe(18.25); // (40x30 + 30x20.83 + 30x0)/100
   });
 
   it("stays 0 without an environment snapshot even if the date suggests a season", () => {
     const result = computeCombined(vikritiVata, [], null, 28, new Date("2026-08-15"));
     expect(result.environment.contribution).toBe(0);
+    expect(result.environment.assumedNormal).toBe(true);
   });
 
-  it("records the model version and explanation payload", () => {
+  it("records the model version, explanation and step-by-step calculation", () => {
     const result = computeCombined(vikritiVata, [], null, 28);
-    expect(result.modelVersion).toBe("combined_50_30_20_experimental_v2");
+    expect(result.modelVersion).toBe("combined_50_30_20_fixed_weights_v3");
     expect(result.explanation).toHaveLength(4);
+    expect(result.calculation).toHaveLength(4);
+    expect(result.calculation[3]).toContain("= ");
   });
 
-  it("attaches a one-line formula to every wearable sub-score", () => {
+  it("attaches a one-line formula and fixed weight to every sub-score", () => {
     const now = new Date();
     const readings: ReadingInput[] = [
       { metric: "steps", value: 6000, provenance: "manual", recordedAt: now.toISOString() },
     ];
     const result = computeCombined(vikritiVata, readings, null, 28);
-    expect(result.wearable.subScores).toHaveLength(1);
-    expect(result.wearable.subScores[0].formula.length).toBeGreaterThan(0);
+    const steps = result.wearable.subScores.find((s) => s.metric === "steps");
+    expect(steps).toBeDefined();
+    expect(steps!.assumedNormal).toBe(false);
+    expect(steps!.weight).toBe(15);
+    expect(steps!.formula.length).toBeGreaterThan(0);
   });
 });
 
@@ -231,7 +280,8 @@ describe("Reference values carry required documentation", () => {
     }
   });
 
-  it("SpO2 is excluded from the combined wearable component (overestimation bias)", () => {
-    expect(COMBINED_WEARABLE_METRICS).not.toContain("spo2");
+  it("SpO2 is part of the combined health component (user-specified fixed weight 10)", () => {
+    expect(COMBINED_WEARABLE_METRICS).toContain("spo2");
+    expect(HEALTH_WEIGHTS.spo2).toBe(10);
   });
 });
