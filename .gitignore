@@ -7,3 +7,6 @@ tsconfig.tsbuildinfo
 upload/
 agent-ctx/
 tool-results/
+.env
+.env.*
+!.env.example
